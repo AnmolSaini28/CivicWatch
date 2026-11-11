@@ -15,31 +15,13 @@ import "./styles.css";
 
 const API = "http://localhost:5000/api";
 
-const USERS_KEY = "cw_users";
+// The backend stores user accounts in PostgreSQL.
+// This key only remembers the UI's logged-in user for the current browser.
 const SESSION_KEY = "cw_session";
 
 // Default map view: India
 const INDIA_CENTER = [22.9734, 78.6569];
 const INDIA_ZOOM = 5;
-
-const readUsers = () => {
-  try {
-    return JSON.parse(localStorage.getItem(USERS_KEY)) || [];
-  } catch {
-    return [];
-  }
-};
-
-async function hash(text) {
-  const buffer = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(text)
-  );
-
-  return Array.from(new Uint8Array(buffer))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 // Automatically position the map based on available issue locations.
 function MapViewport({ points }) {
@@ -68,11 +50,14 @@ function App() {
 
   const [user, setUser] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem(SESSION_KEY));
+      const savedUser = JSON.parse(localStorage.getItem(SESSION_KEY));
+      // Ignore sessions created by the old localStorage-only signup flow.
+      return savedUser?.id && savedUser?.name ? savedUser : null;
     } catch {
       return null;
     }
   });
+  const [authBusy, setAuthBusy] = useState(false);
 
   const [authMsg, setAuthMsg] = useState({
     type: "",
@@ -154,8 +139,7 @@ function App() {
     }
   }
 
-  // Frontend-only demo authentication.
-  // Replace with backend authentication when available.
+  // Authentication requests are sent to the Node/Express backend.
   function go(nextPage) {
     setAuthMsg({ type: "", text: "" });
     setPage(nextPage);
@@ -164,8 +148,11 @@ function App() {
 
   async function signup(event) {
     event.preventDefault();
+    if (authBusy) return;
 
-    const form = Object.fromEntries(new FormData(event.target));
+    setAuthMsg({ type: "", text: "" });
+
+    const form = Object.fromEntries(new FormData(event.currentTarget));
     const email = form.email.trim().toLowerCase();
 
     if (form.name.trim().length < 2) {
@@ -207,67 +194,66 @@ function App() {
       });
     }
 
-    const users = readUsers();
-
-    if (users.some((existingUser) => existingUser.email === email)) {
-      return setAuthMsg({
-        type: "error",
-        text: "An account with this email already exists. Please log in.",
+    setAuthBusy(true);
+    try {
+      // Backend hashes the password and INSERTs the user into PostgreSQL.
+      const response = await axios.post(API + "/auth/signup", {
+        name: form.name.trim(),
+        email,
+        gender: form.gender,
+        mobile,
+        password: form.password,
       });
-    }
 
-    if (users.some((existingUser) => existingUser.mobile === mobile)) {
-      return setAuthMsg({
+      const account = response.data.user;
+      localStorage.setItem(SESSION_KEY, JSON.stringify(account));
+      setUser(account);
+      go("home");
+    } catch (error) {
+      setAuthMsg({
         type: "error",
-        text: "This mobile number is already registered.",
+        text:
+          error.response?.data?.error ||
+          (error.request
+            ? "Cannot connect to the backend. Check that it is running on port 5000."
+            : "Signup failed. Please try again."),
       });
+    } finally {
+      setAuthBusy(false);
     }
-
-    users.push({
-      name: form.name.trim(),
-      email,
-      gender: form.gender,
-      mobile,
-      password: await hash(form.password),
-    });
-
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-
-    const session = {
-      name: form.name.trim(),
-      email,
-    };
-
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    setUser(session);
-    go("home");
   }
 
   async function login(event) {
     event.preventDefault();
+    if (authBusy) return;
 
-    const form = Object.fromEntries(new FormData(event.target));
-    const email = form.email.trim().toLowerCase();
+    setAuthMsg({ type: "", text: "" });
+    const form = Object.fromEntries(new FormData(event.currentTarget));
 
-    const found = readUsers().find(
-      (existingUser) => existingUser.email === email
-    );
-
-    if (!found || found.password !== (await hash(form.password))) {
-      return setAuthMsg({
-        type: "error",
-        text: "Incorrect email or password.",
+    setAuthBusy(true);
+    try {
+      // Backend validates the password against the PostgreSQL user record.
+      const response = await axios.post(API + "/auth/login", {
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
       });
+
+      const account = response.data.user;
+      localStorage.setItem(SESSION_KEY, JSON.stringify(account));
+      setUser(account);
+      go("home");
+    } catch (error) {
+      setAuthMsg({
+        type: "error",
+        text:
+          error.response?.data?.error ||
+          (error.request
+            ? "Cannot connect to the backend. Check that it is running on port 5000."
+            : "Login failed. Please try again."),
+      });
+    } finally {
+      setAuthBusy(false);
     }
-
-    const session = {
-      name: found.name,
-      email,
-    };
-
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    setUser(session);
-    go("home");
   }
 
   function logout() {
@@ -614,8 +600,8 @@ function App() {
                 </div>
               )}
 
-              <button className="primary" type="submit">
-                Log in
+              <button className="primary" type="submit" disabled={authBusy}>
+                {authBusy ? "Logging in..." : "Log in"}
               </button>
 
               <p className="switch">
@@ -716,8 +702,8 @@ function App() {
                 </div>
               )}
 
-              <button className="primary" type="submit">
-                Sign up
+              <button className="primary" type="submit" disabled={authBusy}>
+                {authBusy ? "Creating account..." : "Sign up"}
               </button>
 
               <p className="switch">
