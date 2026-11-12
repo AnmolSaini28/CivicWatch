@@ -13,15 +13,141 @@ import {
 import "leaflet/dist/leaflet.css";
 import "./styles.css";
 
-const API = "http://localhost:5000/api";
+const API = "http://localhost:5001/api";
 
-// The backend stores user accounts in PostgreSQL.
-// This key only remembers the UI's logged-in user for the current browser.
+const USERS_KEY = "cw_users";
 const SESSION_KEY = "cw_session";
 
 // Default map view: India
 const INDIA_CENTER = [22.9734, 78.6569];
 const INDIA_ZOOM = 5;
+
+
+const [errors, setErrors] = useState({});
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const mobileRegex = /^[0-9]{10}$/;
+
+function validatePassword(password) {
+  if (password.length < 8) {
+    return "Password must be at least 8 characters long.";
+  }
+  if (!/[A-Z]/.test(password)) {
+    return "Password must contain an uppercase letter.";
+  }
+  if (!/[a-z]/.test(password)) {
+    return "Password must contain a lowercase letter.";
+  }
+  if (!/[0-9]/.test(password)) {
+    return "Password must contain a number.";
+  }
+  if (!/[^A-Za-z0-9\s]/.test(password)) {
+    return "Password must contain a special character.";
+  }
+
+  return "";
+}
+
+function clearError(field) {
+  setErrors((previous) => ({
+    ...previous,
+    [field]: "",
+  }));
+}
+
+function handleLoginSubmit(event) {
+  event.preventDefault();
+
+  const form = new FormData(event.currentTarget);
+  const email = String(form.get("email") || "").trim();
+  const password = String(form.get("password") || "");
+
+  const newErrors = {};
+
+  if (!emailRegex.test(email)) {
+    newErrors.email = "Please enter a valid email address.";
+  }
+
+  if (!password) {
+    newErrors.password = "Please enter your password.";
+  }
+
+  setErrors(newErrors);
+
+  if (Object.keys(newErrors).length > 0) return;
+
+  // Invoke your existing login function.
+  login(event);
+}
+
+function handleSignupSubmit(event) {
+  event.preventDefault();
+
+  const form = new FormData(event.currentTarget);
+
+  const name = String(form.get("name") || "").trim();
+  const email = String(form.get("email") || "").trim();
+  const mobile = String(form.get("mobile") || "").trim();
+  const gender = String(form.get("gender") || "");
+  const password = String(form.get("password") || "");
+  const confirm = String(form.get("confirm") || "");
+
+  const newErrors = {};
+
+  if (!name) {
+    newErrors.name = "Please enter your full name.";
+  }
+
+  if (!emailRegex.test(email)) {
+    newErrors.email = "Please enter a valid email address.";
+  }
+
+  if (!mobileRegex.test(mobile)) {
+    newErrors.mobile = "Mobile number must contain exactly 10 digits.";
+  }
+
+  if (!gender) {
+    newErrors.gender = "Please select your gender.";
+  }
+
+  const passwordMessage = validatePassword(password);
+  if (passwordMessage) {
+    newErrors.password = passwordMessage;
+  }
+
+  if (!confirm) {
+    newErrors.confirm = "Please confirm your password.";
+  } else if (password !== confirm) {
+    newErrors.confirm = "Passwords do not match.";
+  }
+
+  setErrors(newErrors);
+
+  if (Object.keys(newErrors).length > 0) return;
+
+  // Invoke your existing signup function.
+  signup(event);
+}
+
+
+const readUsers = () => {
+  try {
+    return JSON.parse(localStorage.getItem(USERS_KEY)) || [];
+  } catch {
+    return [];
+  }
+};
+
+async function hash(text) {
+  const buffer = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(text)
+  );
+
+  return Array.from(new Uint8Array(buffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 // Automatically position the map based on available issue locations.
 function MapViewport({ points }) {
@@ -50,14 +176,11 @@ function App() {
 
   const [user, setUser] = useState(() => {
     try {
-      const savedUser = JSON.parse(localStorage.getItem(SESSION_KEY));
-      // Ignore sessions created by the old localStorage-only signup flow.
-      return savedUser?.id && savedUser?.name ? savedUser : null;
+      return JSON.parse(localStorage.getItem(SESSION_KEY));
     } catch {
       return null;
     }
   });
-  const [authBusy, setAuthBusy] = useState(false);
 
   const [authMsg, setAuthMsg] = useState({
     type: "",
@@ -139,7 +262,8 @@ function App() {
     }
   }
 
-  // Authentication requests are sent to the Node/Express backend.
+  // Frontend-only demo authentication.
+  // Replace with backend authentication when available.
   function go(nextPage) {
     setAuthMsg({ type: "", text: "" });
     setPage(nextPage);
@@ -148,11 +272,8 @@ function App() {
 
   async function signup(event) {
     event.preventDefault();
-    if (authBusy) return;
 
-    setAuthMsg({ type: "", text: "" });
-
-    const form = Object.fromEntries(new FormData(event.currentTarget));
+    const form = Object.fromEntries(new FormData(event.target));
     const email = form.email.trim().toLowerCase();
 
     if (form.name.trim().length < 2) {
@@ -194,66 +315,67 @@ function App() {
       });
     }
 
-    setAuthBusy(true);
-    try {
-      // Backend hashes the password and INSERTs the user into PostgreSQL.
-      const response = await axios.post(API + "/auth/signup", {
-        name: form.name.trim(),
-        email,
-        gender: form.gender,
-        mobile,
-        password: form.password,
-      });
+    const users = readUsers();
 
-      const account = response.data.user;
-      localStorage.setItem(SESSION_KEY, JSON.stringify(account));
-      setUser(account);
-      go("home");
-    } catch (error) {
-      setAuthMsg({
+    if (users.some((existingUser) => existingUser.email === email)) {
+      return setAuthMsg({
         type: "error",
-        text:
-          error.response?.data?.error ||
-          (error.request
-            ? "Cannot connect to the backend. Check that it is running on port 5000."
-            : "Signup failed. Please try again."),
+        text: "An account with this email already exists. Please log in.",
       });
-    } finally {
-      setAuthBusy(false);
     }
+
+    if (users.some((existingUser) => existingUser.mobile === mobile)) {
+      return setAuthMsg({
+        type: "error",
+        text: "This mobile number is already registered.",
+      });
+    }
+
+    users.push({
+      name: form.name.trim(),
+      email,
+      gender: form.gender,
+      mobile,
+      password: await hash(form.password),
+    });
+
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+
+    const session = {
+      name: form.name.trim(),
+      email,
+    };
+
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    setUser(session);
+    go("home");
   }
 
   async function login(event) {
     event.preventDefault();
-    if (authBusy) return;
 
-    setAuthMsg({ type: "", text: "" });
-    const form = Object.fromEntries(new FormData(event.currentTarget));
+    const form = Object.fromEntries(new FormData(event.target));
+    const email = form.email.trim().toLowerCase();
 
-    setAuthBusy(true);
-    try {
-      // Backend validates the password against the PostgreSQL user record.
-      const response = await axios.post(API + "/auth/login", {
-        email: form.email.trim().toLowerCase(),
-        password: form.password,
-      });
+    const found = readUsers().find(
+      (existingUser) => existingUser.email === email
+    );
 
-      const account = response.data.user;
-      localStorage.setItem(SESSION_KEY, JSON.stringify(account));
-      setUser(account);
-      go("home");
-    } catch (error) {
-      setAuthMsg({
+    if (!found || found.password !== (await hash(form.password))) {
+      return setAuthMsg({
         type: "error",
-        text:
-          error.response?.data?.error ||
-          (error.request
-            ? "Cannot connect to the backend. Check that it is running on port 5000."
-            : "Login failed. Please try again."),
+        text: "Incorrect email or password.",
       });
-    } finally {
-      setAuthBusy(false);
     }
+
+    const session = {
+      name: found.name,
+      email,
+    };
+
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    setUser(session);
+    go("home");
   }
 
   function logout() {
@@ -566,161 +688,267 @@ function App() {
           </section>
         )}
 
-        {/* LOGIN */}
-        {page === "login" && (
-          <section className="authpage">
-            <form onSubmit={login} className="form authform">
-              <h2>Welcome back</h2>
-              <p className="muted">Log in to your CivicWatch account.</p>
+        
+{/* LOGIN */}
+{page === "login" && (
+  <section className="authpage">
+    <form
+      onSubmit={handleLoginSubmit}
+      className="form authform"
+      noValidate
+    >
+      <h2>Welcome back</h2>
+      <p className="muted">Log in to your CivicWatch account.</p>
 
-              <label>
-                Email
-                <input
-                  name="email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                />
-              </label>
-
-              <label>
-                Password
-                <input
-                  name="password"
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                />
-              </label>
-
-              {authMsg.text && (
-                <div className={"authmsg " + authMsg.type} role="alert">
-                  {authMsg.text}
-                </div>
-              )}
-
-              <button className="primary" type="submit" disabled={authBusy}>
-                {authBusy ? "Logging in..." : "Log in"}
-              </button>
-
-              <p className="switch">
-                New to CivicWatch?{" "}
-                <a
-                  href="#signup"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    go("signup");
-                  }}
-                >
-                  Create an account
-                </a>
-              </p>
-            </form>
-          </section>
+      <label>
+        Email
+        <input
+          name="email"
+          type="email"
+          required
+          autoComplete="email"
+          placeholder="you@example.com"
+          aria-invalid={Boolean(errors.email)}
+          onChange={() => clearError("email")}
+        />
+        {errors.email && (
+          <small className="field-error" role="alert">
+            {errors.email}
+          </small>
         )}
+      </label>
 
-        {/* SIGNUP */}
-        {page === "signup" && (
-          <section className="authpage">
-            <form onSubmit={signup} className="form authform">
-              <h2>Create your account</h2>
-              <p className="muted">It takes less than a minute.</p>
-
-              <label>
-                Full name
-                <input
-                  name="name"
-                  required
-                  autoComplete="name"
-                  placeholder="Your name"
-                />
-              </label>
-
-              <label>
-                Email
-                <input
-                  name="email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                />
-              </label>
-
-              <label>
-                Mobile number
-                <input
-                  name="mobile"
-                  type="tel"
-                  required
-                  inputMode="numeric"
-                  autoComplete="tel"
-                  placeholder="10-digit mobile number"
-                />
-              </label>
-
-              <label>
-                Gender
-                <select name="gender" required defaultValue="">
-                  <option value="" disabled>
-                    Select gender
-                  </option>
-                  <option>Male</option>
-                  <option>Female</option>
-                  <option>Other</option>
-                  <option>Prefer not to say</option>
-                </select>
-              </label>
-
-              <label>
-                Password
-                <input
-                  name="password"
-                  type="password"
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  placeholder="At least 8 characters"
-                />
-              </label>
-
-              <label>
-                Confirm password
-                <input
-                  name="confirm"
-                  type="password"
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                />
-              </label>
-
-              {authMsg.text && (
-                <div className={"authmsg " + authMsg.type} role="alert">
-                  {authMsg.text}
-                </div>
-              )}
-
-              <button className="primary" type="submit" disabled={authBusy}>
-                {authBusy ? "Creating account..." : "Sign up"}
-              </button>
-
-              <p className="switch">
-                Already have an account?{" "}
-                <a
-                  href="#login"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    go("login");
-                  }}
-                >
-                  Log in
-                </a>
-              </p>
-            </form>
-          </section>
+      <label>
+        Password
+        <input
+          name="password"
+          type="password"
+          required
+          autoComplete="current-password"
+          placeholder="Enter your password"
+          aria-invalid={Boolean(errors.password)}
+          onChange={() => clearError("password")}
+        />
+        {errors.password && (
+          <small className="field-error" role="alert">
+            {errors.password}
+          </small>
         )}
+      </label>
+
+      {authMsg.text && (
+        <div className={"authmsg " + authMsg.type} role="alert">
+          {authMsg.text}
+        </div>
+      )}
+
+      <button
+        className="primary"
+        type="submit"
+        disabled={authBusy}
+      >
+        {authBusy ? "Logging in..." : "Log in"}
+      </button>
+
+      <p className="switch">
+        New to CivicWatch?{" "}
+        <a
+          href="#signup"
+          onClick={(event) => {
+            event.preventDefault();
+            setErrors({});
+            go("signup");
+          }}
+        >
+          Create an account
+        </a>
+      </p>
+    </form>
+  </section>
+)}
+
+{/* SIGNUP */}
+{page === "signup" && (
+  <section className="authpage">
+    <form
+      onSubmit={handleSignupSubmit}
+      className="form authform"
+      noValidate
+    >
+      <h2>Create your account</h2>
+      <p className="muted">It takes less than a minute.</p>
+
+      {/* FULL NAME */}
+      <label>
+        Full name
+        <input
+          name="name"
+          type="text"
+          required
+          autoComplete="name"
+          placeholder="Your full name"
+          aria-invalid={Boolean(errors.name)}
+          onChange={() => clearError("name")}
+        />
+        {errors.name && (
+          <small className="field-error" role="alert">
+            {errors.name}
+          </small>
+        )}
+      </label>
+
+      {/* EMAIL */}
+      <label>
+        Email
+        <input
+          name="email"
+          type="email"
+          required
+          autoComplete="email"
+          placeholder="you@example.com"
+          aria-invalid={Boolean(errors.email)}
+          onChange={() => clearError("email")}
+        />
+        {errors.email && (
+          <small className="field-error" role="alert">
+            {errors.email}
+          </small>
+        )}
+      </label>
+
+      {/* MOBILE NUMBER */}
+      <label>
+        Mobile number
+        <input
+          name="mobile"
+          type="tel"
+          required
+          inputMode="numeric"
+          autoComplete="tel"
+          maxLength={10}
+          placeholder="10-digit mobile number"
+          aria-invalid={Boolean(errors.mobile)}
+          onChange={(event) => {
+            event.currentTarget.value =
+              event.currentTarget.value
+                .replace(/\D/g, "")
+                .slice(0, 10);
+
+            clearError("mobile");
+          }}
+        />
+        {errors.mobile && (
+          <small className="field-error" role="alert">
+            {errors.mobile}
+          </small>
+        )}
+      </label>
+
+      {/* GENDER */}
+      <label>
+        Gender
+        <select
+          name="gender"
+          required
+          defaultValue=""
+          aria-invalid={Boolean(errors.gender)}
+          onChange={() => clearError("gender")}
+        >
+          <option value="" disabled>
+            Select gender
+          </option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Other">Other</option>
+          <option value="Prefer not to say">
+            Prefer not to say
+          </option>
+        </select>
+        {errors.gender && (
+          <small className="field-error" role="alert">
+            {errors.gender}
+          </small>
+        )}
+      </label>
+
+      {/* PASSWORD */}
+      <label>
+        Password
+        <input
+          name="password"
+          type="password"
+          required
+          minLength={8}
+          autoComplete="new-password"
+          placeholder="Create a strong password"
+          aria-invalid={Boolean(errors.password)}
+          onChange={() => clearError("password")}
+        />
+
+        <small className="password-hint">
+          Minimum 8 characters, including uppercase,
+          lowercase, number and special character.
+        </small>
+
+        {errors.password && (
+          <small className="field-error" role="alert">
+            {errors.password}
+          </small>
+        )}
+      </label>
+
+      {/* CONFIRM PASSWORD */}
+      <label>
+        Confirm password
+        <input
+          name="confirm"
+          type="password"
+          required
+          minLength={8}
+          autoComplete="new-password"
+          placeholder="Re-enter your password"
+          aria-invalid={Boolean(errors.confirm)}
+          onChange={() => clearError("confirm")}
+        />
+        {errors.confirm && (
+          <small className="field-error" role="alert">
+            {errors.confirm}
+          </small>
+        )}
+      </label>
+
+      {/* API SUCCESS / ERROR MESSAGE */}
+      {authMsg.text && (
+        <div className={"authmsg " + authMsg.type} role="alert">
+          {authMsg.text}
+        </div>
+      )}
+
+      <button
+        className="primary"
+        type="submit"
+        disabled={authBusy}
+      >
+        {authBusy ? "Creating account..." : "Sign up"}
+      </button>
+
+      <p className="switch">
+        Already have an account?{" "}
+        <a
+          href="#login"
+          onClick={(event) => {
+            event.preventDefault();
+            setErrors({});
+            go("login");
+          }}
+        >
+          Log in
+        </a>
+      </p>
+    </form>
+  </section>
+)}
+
       </main>
 
       <footer>

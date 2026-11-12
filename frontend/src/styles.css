@@ -539,4 +539,28 @@ footer {
   .issue-popup {
     max-width: 220px;
   }
+
+
+.field-error {
+  display: block;
+  margin-top: 5px;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.authform input[aria-invalid="true"],
+.authform select[aria-invalid="true"] {
+  border: 1px solid #dc2626;
+  outline-color: #dc2626;
+}
+
+.password-hint {
+  display: block;
+  margin-top: 5px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 }
