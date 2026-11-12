@@ -1,2 +1,542 @@
-*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#f5f7fb;color:#172033}nav{display:flex;justify-content:space-between;align-items:center;padding:16px 6%;background:#0b3d2e;color:white;position:sticky;top:0;z-index:5}.brand{font-size:22px;font-weight:800}button{border:0;border-radius:9px;padding:10px 15px;margin:3px;cursor:pointer;background:#e7ece9;color:#173d2d;font-weight:600}.primary{background:#f59e0b;color:#172033}nav button{background:transparent;color:#dcebe5}nav button.active{background:#1b5e45;color:white}main{max-width:1100px;margin:auto;padding:45px 20px;min-height:82vh}.hero{text-align:center;padding:70px 10px}.hero h1{font-size:clamp(34px,6vw,66px);max-width:900px;margin:0 auto 18px}.hero p{font-size:19px;color:#536071;max-width:700px;margin:0 auto 25px;line-height:1.6}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-top:45px}.cards>div,.tracked,.notice,.list,.table,.form{background:white;border-radius:14px;padding:20px;box-shadow:0 8px 25px rgba(30,50,70,.08)}.cards b{font-size:34px;display:block;color:#0b3d2e}.cards span{color:#687386}h2{font-size:36px;margin-top:0}.form{display:grid;gap:15px;max-width:760px}.form label{display:grid;gap:7px;font-weight:700}.form input,.form textarea,.form select,.track input{padding:12px;border:1px solid #d8dee8;border-radius:9px;font:inherit;width:100%}.form textarea{min-height:110px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:15px}.muted{color:#657084}.notice{margin-top:20px;border-left:5px solid #f59e0b}.map{height:520px;background:white;border-radius:14px;overflow:hidden}.empty{padding:30px}.list>div,.row{display:flex;justify-content:space-between;padding:13px;border-bottom:1px solid #edf0f4}.status{padding:5px 10px;border-radius:20px;font-size:13px;font-weight:700}.pending{background:#fff1d6;color:#9a5b00}.in-progress{background:#dcecff;color:#16599a}.resolved{background:#d9f7e4;color:#17713b}.track{display:flex;gap:10px;max-width:650px}.tracked{margin-top:20px}.dashboard{margin:20px 0}.table{padding:0;overflow:hidden}footer{text-align:center;padding:25px;background:#0b3d2e;color:#dcebe5}@media(max-width:650px){nav{flex-direction:column;gap:8px}.grid2{grid-template-columns:1fr}.track{flex-direction:column}.hero{padding:35px 0}main{padding:30px 15px}}
-nav .links{display:flex;flex-wrap:wrap;justify-content:center}nav .auth{display:flex;align-items:center;gap:4px}.hello{color:#dcebe5;font-weight:600;margin-right:6px}nav .auth .primary{background:#f59e0b;color:#172033}.authpage{display:flex;justify-content:center;padding-top:20px}.authform{width:100%;max-width:440px}.authform h2{margin:0;font-size:30px}.authform .muted{margin:0}.authmsg{padding:11px 13px;border-radius:9px;font-size:14px;font-weight:600}.authmsg.error{background:#fde8e6;color:#a32818}.switch{margin:0;text-align:center;color:#657084}.switch a{color:#0b3d2e;font-weight:700}@media(max-width:900px){nav{flex-wrap:wrap;justify-content:center;gap:8px}}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, Arial, sans-serif;
+  background: #f5f7fb;
+  color: #172033;
+}
+
+/* Navigation */
+nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 6%;
+  background: #0b3d2e;
+  color: white;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.brand {
+  font-size: 22px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+nav .links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+nav .auth {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hello {
+  color: #dcebe5;
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+/* Buttons */
+button {
+  border: 0;
+  border-radius: 9px;
+  padding: 10px 15px;
+  margin: 3px;
+  cursor: pointer;
+  background: #e7ece9;
+  color: #173d2d;
+  font-weight: 600;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+.primary {
+  background: #f59e0b;
+  color: #172033;
+}
+
+.primary:hover {
+  background: #e89405;
+}
+
+nav button {
+  background: transparent;
+  color: #dcebe5;
+}
+
+nav button.active {
+  background: #1b5e45;
+  color: white;
+}
+
+nav .auth .primary {
+  background: #f59e0b;
+  color: #172033;
+}
+
+/* Main layout */
+main {
+  max-width: 1100px;
+  margin: auto;
+  padding: 45px 20px;
+  min-height: 82vh;
+}
+
+h2 {
+  font-size: 36px;
+  margin-top: 0;
+}
+
+h3 {
+  margin-top: 28px;
+}
+
+.muted {
+  color: #657084;
+}
+
+/* Home page */
+.hero {
+  text-align: center;
+  padding: 70px 10px;
+}
+
+.hero h1 {
+  font-size: clamp(34px, 6vw, 66px);
+  max-width: 900px;
+  margin: 0 auto 18px;
+}
+
+.hero p {
+  font-size: 19px;
+  color: #536071;
+  max-width: 700px;
+  margin: 0 auto 25px;
+  line-height: 1.6;
+}
+
+/* Statistics cards */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+  margin-top: 45px;
+}
+
+.cards > div,
+.tracked,
+.notice,
+.list,
+.table,
+.form {
+  background: white;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 8px 25px rgba(30, 50, 70, 0.08);
+}
+
+.cards b {
+  font-size: 34px;
+  display: block;
+  color: #0b3d2e;
+}
+
+.cards span {
+  color: #687386;
+}
+
+.dashboard {
+  margin: 20px 0;
+}
+
+/* India public issue map */
+.map-description {
+  color: #657084;
+  line-height: 1.6;
+  margin-top: -12px;
+  margin-bottom: 20px;
+}
+
+.map {
+  position: relative;
+  height: 560px;
+  width: 100%;
+  background: #e8f0f5;
+  border: 1px solid #dfe7ee;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 25px rgba(30, 50, 70, 0.08);
+}
+
+/* Ensure Leaflet fills the map container */
+.map .leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #e8f0f5;
+  font-family: Inter, Arial, sans-serif;
+  z-index: 1;
+}
+
+/* Empty state appears over the map without hiding it */
+.map-empty {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(340px, calc(100% - 32px));
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e1e8e4;
+  border-left: 4px solid #0b6848;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(20, 40, 30, 0.12);
+  pointer-events: none;
+}
+
+.map-empty strong {
+  color: #0b3d2e;
+  font-size: 15px;
+}
+
+.map-empty span {
+  color: #657084;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Map summary below the map */
+.map-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 16px 18px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(30, 50, 70, 0.05);
+}
+
+.map-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  flex: 1;
+}
+
+.map-summary b {
+  color: #0b3d2e;
+  font-size: 24px;
+}
+
+.map-summary span {
+  color: #687386;
+  font-size: 13px;
+}
+
+.map-summary button {
+  background: #0b3d2e;
+  color: white;
+  padding: 11px 16px;
+}
+
+.map-summary button:hover {
+  background: #1b5e45;
+}
+
+/* Issue marker popups */
+.issue-popup {
+  min-width: 190px;
+  max-width: 270px;
+}
+
+.issue-popup h3 {
+  margin: 0 0 10px;
+  font-size: 17px;
+  color: #0b3d2e;
+}
+
+.issue-popup p {
+  margin: 8px 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+}
+
+.leaflet-popup-content {
+  margin: 14px;
+}
+
+/* Empty states */
+.empty {
+  padding: 30px;
+  color: #657084;
+}
+
+/* Lists and reports */
+.list > div,
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.list > div:last-child,
+.row:last-child {
+  border-bottom: 0;
+}
+
+.table {
+  padding: 0;
+  overflow: hidden;
+}
+
+.row span {
+  overflow-wrap: anywhere;
+}
+
+/* Issue status labels */
+.status {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pending {
+  background: #fff1d6;
+  color: #9a5b00;
+}
+
+.in-progress {
+  background: #dcecff;
+  color: #16599a;
+}
+
+.resolved {
+  background: #d9f7e4;
+  color: #17713b;
+}
+
+/* Track report */
+.track {
+  display: flex;
+  gap: 10px;
+  max-width: 650px;
+}
+
+.track input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 9px;
+  font: inherit;
+}
+
+.tracked {
+  margin-top: 20px;
+}
+
+/* Forms */
+.form {
+  display: grid;
+  gap: 15px;
+  max-width: 760px;
+}
+
+.form label {
+  display: grid;
+  gap: 7px;
+  font-weight: 700;
+}
+
+.form input,
+.form textarea,
+.form select {
+  padding: 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 9px;
+  font: inherit;
+  width: 100%;
+  background: white;
+}
+
+.form textarea {
+  min-height: 110px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.notice {
+  margin-top: 20px;
+  border-left: 5px solid #f59e0b;
+}
+
+/* Login and signup */
+.authpage {
+  display: flex;
+  justify-content: center;
+  padding-top: 20px;
+}
+
+.authform {
+  width: 100%;
+  max-width: 440px;
+}
+
+.authform h2 {
+  margin: 0;
+  font-size: 30px;
+}
+
+.authform .muted {
+  margin: 0;
+}
+
+.authmsg {
+  padding: 11px 13px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.authmsg.error {
+  background: #fde8e6;
+  color: #a32818;
+}
+
+.switch {
+  margin: 0;
+  text-align: center;
+  color: #657084;
+}
+
+.switch a {
+  color: #0b3d2e;
+  font-weight: 700;
+}
+
+/* Footer */
+footer {
+  text-align: center;
+  padding: 25px;
+  background: #0b3d2e;
+  color: #dcebe5;
+}
+
+/* Responsive layouts */
+@media (max-width: 900px) {
+  nav {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  nav .links {
+    order: 3;
+    width: 100%;
+  }
+
+  .map {
+    height: 500px;
+  }
+}
+
+@media (max-width: 650px) {
+  nav {
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 12px;
+  }
+
+  nav .links {
+    order: initial;
+  }
+
+  nav .auth {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+
+  .track {
+    flex-direction: column;
+  }
+
+  .hero {
+    padding: 35px 0;
+  }
+
+  main {
+    padding: 30px 15px;
+  }
+
+  h2 {
+    font-size: 29px;
+  }
+
+  .map {
+    height: 450px;
+    border-radius: 12px;
+  }
+
+  .map-empty {
+    top: 10px;
+    left: 10px;
+    width: min(300px, calc(100% - 20px));
+    padding: 11px 12px;
+  }
+
+  .map-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .map-summary button {
+    width: 100%;
+    margin: 4px 0 0;
+  }
+
+  .row {
+    flex-wrap: wrap;
+  }
+
+  .issue-popup {
+    max-width: 220px;
+  }
+}
