@@ -5,11 +5,10 @@ const bcrypt = require("bcryptjs");
 const pool = require("./db");
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
-
 
 // Small helper to create readable tracking IDs.
 function makeTrackingId() {
@@ -115,186 +114,59 @@ app.post("/api/issues", async (req, res) => {
 // Create an account. Passwords are hashed before saving.
 app.post("/api/auth/signup", async (req, res) => {
   const { name, email, gender, mobile, password } = req.body;
-
-  const normalizedName =
-    typeof name === "string" ? name.trim() : "";
-
-  const normalizedEmail =
-    typeof email === "string"
-      ? email.trim().toLowerCase()
-      : "";
-
-  const normalizedMobile =
-    typeof mobile === "string" ? mobile.trim() : "";
-
-  if (
-    !normalizedName ||
-    !normalizedEmail ||
-    !gender ||
-    !normalizedMobile ||
-    !password
-  ) {
-    return res.status(400).json({
-      error: "Please fill in all fields.",
-    });
+  if (!name || !email || !gender || !mobile || !password) {
+    return res.status(400).json({ error: "Please fill in all fields" });
   }
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
-  if (!emailRegex.test(normalizedEmail)) {
-    return res.status(400).json({
-      error: "Please enter a valid email address.",
-    });
-  }
-
-  if (!/^[0-9]{10}$/.test(normalizedMobile)) {
-    return res.status(400).json({
-      error: "Mobile number must contain exactly 10 digits.",
-    });
-  }
-
-  if (
-    !["Male", "Female", "Other", "Prefer not to say"]
-      .includes(gender)
-  ) {
-    return res.status(400).json({
-      error: "Please select a valid gender.",
-    });
-  }
-
-  const strongPassword =
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s]).{8,}$/;
-
-  if (
-    typeof password !== "string" ||
-    !strongPassword.test(password)
-  ) {
-    return res.status(400).json({
-      error:
-        "Password must be at least 8 characters and contain uppercase, lowercase, number, and special character.",
-    });
+  if (password.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters" });
   }
 
   try {
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedMobile = mobile.replace(/[\s-]/g, "").replace(/^\+91|^0/, "");
     const passwordHash = await bcrypt.hash(password, 10);
-
     const result = await pool.query(
-      `INSERT INTO users
-       (name, email, gender, mobile, password_hash)
+      `INSERT INTO users (name, email, gender, mobile, password_hash)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, name, email, gender, mobile`,
-      [
-        normalizedName,
-        normalizedEmail,
-        gender,
-        normalizedMobile,
-        passwordHash,
-      ]
+      [name.trim(), normalizedEmail, gender, normalizedMobile, passwordHash]
     );
-
-    return res.status(201).json({
-      user: result.rows[0],
-    });
-
+    res.status(201).json({ user: result.rows[0] });
   } catch (error) {
     if (error.code === "23505") {
-      return res.status(409).json({
-        error: "Email or mobile number is already registered.",
-      });
+      return res.status(409).json({ error: "This email or mobile number is already registered" });
     }
-
     console.error("Signup:", error.message);
-
-    return res.status(500).json({
-      error: "Could not create account.",
-    });
+    res.status(500).json({ error: "Could not create account" });
   }
 });
 
 // Log in by checking the password against the stored hash.
-
 app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required" });
+  }
   try {
-    const { email, password } = req.body || {};
-
-    // 1. Validate required fields
-    if (
-      typeof email !== "string" ||
-      typeof password !== "string" ||
-      !email.trim() ||
-      !password
-    ) {
-      return res.status(400).json({
-        error: "Email and password are required.",
-      });
-    }
-
-    // 2. Normalize email
-    const normalizedEmail = email.trim().toLowerCase();
-
-    // 3. Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
-    if (!emailRegex.test(normalizedEmail)) {
-      return res.status(400).json({
-        error: "Please enter a valid email address.",
-      });
-    }
-
-    // 4. Check password length
-    if (password.length < 8) {
-      return res.status(400).json({
-        error: "Password must be at least 8 characters long.",
-      });
-    }
-
-    // 5. Find the user in PostgreSQL
     const result = await pool.query(
-      `SELECT id, name, email, gender, mobile, password_hash
-       FROM users
-       WHERE email = $1`,
-      [normalizedEmail]
+      "SELECT id, name, email, gender, mobile, password_hash FROM users WHERE email = $1",
+      [email.trim().toLowerCase()]
     );
-
-    // 6. Check whether user exists
     if (result.rows.length === 0) {
-      return res.status(401).json({
-        error: "Incorrect email or password.",
-      });
+      return res.status(401).json({ error: "Incorrect email or password" });
     }
-
     const account = result.rows[0];
-
-    // 7. Compare entered password with stored hash
-    const passwordMatches = await bcrypt.compare(
-      password,
-      account.password_hash
-    );
-
+    const passwordMatches = await bcrypt.compare(password, account.password_hash);
     if (!passwordMatches) {
-      return res.status(401).json({
-        error: "Incorrect email or password.",
-      });
+      return res.status(401).json({ error: "Incorrect email or password" });
     }
-
-    // 8. Remove password hash from response
     const { password_hash, ...safeUser } = account;
-
-    // 9. Return successful login response
-    return res.status(200).json({
-      message: "Login successful.",
-      user: safeUser,
-    });
-
+    res.json({ user: safeUser });
   } catch (error) {
     console.error("Login:", error.message);
-
-    return res.status(500).json({
-      error: "Something went wrong. Please try again later.",
-    });
+    res.status(500).json({ error: "Could not log in" });
   }
 });
-
 
 // Check the database connection at startup.
 async function startServer() {
