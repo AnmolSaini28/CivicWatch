@@ -540,3 +540,53 @@ footer {
     max-width: 220px;
   }
 }
+.language-picker {
+  display: inline-flex;
+  align-items: center;
+  margin: 3px;
+}
+
+.language-picker select {
+  min-height: 40px;
+  padding: 10px 30px 10px 12px;
+  border: 1px solid rgba(220, 235, 229, 0.25);
+  border-radius: 9px;
+  background: #1b5e45;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.language-picker select:hover {
+  background: #246d53;
+}
+
+.language-picker select:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+.language-picker option {
+  background: #ffffff;
+  color: #173d2d;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 900px) {
+  nav .links {
+    align-items: center;
+  }
+}
