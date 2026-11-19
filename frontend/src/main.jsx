@@ -19,6 +19,23 @@ const API = "http://localhost:5001/api";
 // This key only remembers the UI's logged-in user for the current browser.
 const SESSION_KEY = "cw_session";
 
+// Sample authorities used for the complaint dropdown.
+// The backend API remains the primary source; this list is a fallback.
+const DEFAULT_AUTHORITIES = [
+  "Municipal Corporation",
+  "Public Works Department (PWD)",
+  "Traffic Police Department",
+  "Water Supply Department",
+  "Electricity Department",
+  "Sanitation and Waste Management",
+  "Drainage and Sewerage Department",
+  "Street Lighting Department",
+  "Parks and Garden Department",
+  "Pollution Control Board",
+  "Urban Development Authority",
+  "Fire and Emergency Services",
+];
+
 // Default map view: India
 const INDIA_CENTER = [22.9734, 78.6569];
 const INDIA_ZOOM = 5;
@@ -47,6 +64,9 @@ function App() {
   const [page, setPage] = useState("home");
   const [issues, setIssues] = useState([]);
   const [dash, setDash] = useState(null);
+  const [authorities, setAuthorities] = useState([]);
+  const [complaintBusy, setComplaintBusy] = useState(false);
+  const [complaintMsg, setComplaintMsg] = useState({ type: "", text: "" });
 
   const [user, setUser] = useState(() => {
     try {
@@ -82,6 +102,9 @@ function App() {
   useEffect(() => {
     loadIssues();
     loadDash();
+    axios.get(API + "/authorities")
+      .then((response) => setAuthorities(response.data))
+      .catch(() => setAuthorities(DEFAULT_AUTHORITIES));
   }, []);
 
   // Keep only issues with valid geographic coordinates.
@@ -136,6 +159,35 @@ function App() {
       setTracked({
         error: "No issue found with this tracking ID",
       });
+    }
+  }
+
+  async function submitComplaint(event) {
+    event.preventDefault();
+    if (complaintBusy) return;
+
+    setComplaintMsg({ type: "", text: "" });
+    const complaintForm = event.currentTarget;
+    const formData = new FormData(complaintForm);
+    // The backend verifies this ID exists; anonymous submissions send no userId.
+    if (user?.id) formData.append("userId", user.id);
+
+    setComplaintBusy(true);
+    try {
+      const response = await axios.post(API + "/issues", formData);
+      setComplaintMsg({
+        type: "success",
+        text: `Complaint submitted successfully. Your tracking ID is ${response.data.tracking_id}.`,
+      });
+      complaintForm.reset();
+      await Promise.all([loadIssues(), loadDash()]);
+    } catch (error) {
+      setComplaintMsg({
+        type: "error",
+        text: error.response?.data?.error || "Could not submit complaint. Please try again.",
+      });
+    } finally {
+      setComplaintBusy(false);
     }
   }
 
@@ -215,7 +267,7 @@ function App() {
         text:
           error.response?.data?.error ||
           (error.request
-            ? "Cannot connect to the backend. Check that it is running on port 5000."
+            ? "Cannot connect to the backend. Check that it is running on port 5001."
             : "Signup failed. Please try again."),
       });
     } finally {
@@ -248,7 +300,7 @@ function App() {
         text:
           error.response?.data?.error ||
           (error.request
-            ? "Cannot connect to the backend. Check that it is running on port 5000."
+            ? "Cannot connect to the backend. Check that it is running on port 5001."
             : "Login failed. Please try again."),
       });
     } finally {
@@ -271,7 +323,7 @@ function App() {
         <div className="brand">🇮🇳 CivicWatch</div>
 
         <div className="links">
-          {["home", "map", "dashboard", "track"].map((item) => (
+          {["home", "report", "map", "dashboard", "track"].map((item) => (
             <button
               key={item}
               onClick={() => go(item)}
@@ -356,6 +408,73 @@ function App() {
           </section>
         )}
 
+        {/* SUBMIT COMPLAINT */}
+        {page === "report" && (
+          <section className="authpage">
+            <form className="form complaint-form" onSubmit={submitComplaint}>
+              <h2>Report a civic issue</h2>
+              <p className="muted">
+                Submit a complaint with details and forward it to the relevant authority.
+                {user ? ` Submitting as ${user.name}.` : " You can submit anonymously without logging in."}
+              </p>
+
+              <label>
+                Complaint title
+                <input
+                  name="title"
+                  type="text"
+                  maxLength={200}
+                  placeholder="e.g. Large pothole near main road"
+                  required
+                />
+              </label>
+
+              <label>
+                Description
+                <textarea
+                  name="description"
+                  rows={5}
+                  placeholder="Describe the issue, its location and how it affects people..."
+                  required
+                />
+              </label>
+
+              <label>
+                Upload photo (optional)
+                <input
+                  name="photo"
+                  type="file"
+                  accept="image/*"
+                />
+                <span className="field-help">Image files only. Maximum size: 5 MB.</span>
+              </label>
+
+              <label>
+                Forward complaint to
+                <select name="authority" required defaultValue="">
+                  <option value="" disabled>Select an authority</option>
+                  {authorities.map((authority) => (
+                    <option key={authority} value={authority}>{authority}</option>
+                  ))}
+                </select>
+              </label>
+
+              {complaintMsg.text && (
+                <div className={"authmsg " + complaintMsg.type} role="status">
+                  {complaintMsg.text}
+                </div>
+              )}
+
+              <button className="primary" type="submit" disabled={complaintBusy || authorities.length === 0}>
+                {complaintBusy ? "Submitting..." : "Submit complaint"}
+              </button>
+              {authorities.length === 0 && (
+                <p className="field-help">Authorities could not be loaded. Please check that the backend is running.</p>
+              )}
+            </form>
+          </section>
+        )}
+
         {/* INDIA MAP */}
         {page === "map" && (
           <section>
@@ -393,7 +512,7 @@ function App() {
                   >
                     <Popup>
                       <div className="issue-popup">
-                        <h3>{issue.category || "Civic issue"}</h3>
+                        <h3>{issue.title || issue.category || "Civic issue"}</h3>
 
                         <p>
                           {issue.description || "No description provided."}
@@ -542,7 +661,7 @@ function App() {
                   <p>{tracked.error}</p>
                 ) : (
                   <>
-                    <h3>{tracked.category}</h3>
+                    <h3>{tracked.title || tracked.category}</h3>
                     <p>{tracked.description}</p>
 
                     <p>

@@ -432,6 +432,36 @@ h3 {
   font-weight: 600;
 }
 
+.authmsg.success {
+  background: #d9f7e4;
+  color: #17713b;
+}
+
+.field-help {
+  color: #657084;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.complaint-form {
+  width: 100%;
+  max-width: 650px;
+}
+
+.complaint-form h2 {
+  margin: 0;
+  font-size: 30px;
+}
+
+.complaint-form .muted {
+  margin: 0 0 5px;
+  line-height: 1.5;
+}
+
+.complaint-form input[type="file"] {
+  padding: 9px;
+}
+
 .authmsg.error {
   background: #fde8e6;
   color: #a32818;
