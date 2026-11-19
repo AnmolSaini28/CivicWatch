@@ -11,6 +11,19 @@
 --   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 -- );
 
+
+
+-- ADMIN TABLE
+
+CREATE TABLE IF NOT EXISTS admins (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS issues (
   id SERIAL PRIMARY KEY,
   tracking_id VARCHAR(20) UNIQUE NOT NULL,
@@ -24,6 +37,8 @@ CREATE TABLE IF NOT EXISTS issues (
     CHECK (status IN ('Pending', 'In Progress', 'Resolved')),
   latitude NUMERIC(10, 7),
   longitude NUMERIC(10, 7),
+  city VARCHAR(100),
+  resolved_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -4,6 +4,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
@@ -98,6 +99,72 @@ function makeTrackingId() {
     "CW-" +
     Math.random().toString(36).substring(2, 8).toUpperCase()
   );
+}
+
+
+// ADMIN AUTHENTICATION MIDDLEWARE
+
+async function verifyAdmin(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({
+      error: "Admin authentication required"
+    });
+  }
+
+  const token = authHeader.slice(7);
+
+  try {
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET,
+      { algorithms: ["HS256"] }
+    );
+
+    if (
+      decoded.type !== "admin" ||
+      !Number.isInteger(decoded.adminId)
+    ) {
+      return res.status(403).json({
+        error: "Admin access only"
+      });
+    }
+
+    const result = await pool.query(
+      `SELECT id, name, email
+       FROM admins
+       WHERE id = $1 AND is_active = TRUE`,
+      [decoded.adminId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(403).json({
+        error: "Admin account is inactive or unavailable"
+      });
+    }
+
+    req.admin = result.rows[0];
+
+    next();
+
+  } catch (error) {
+    if (
+      error.name === "JsonWebTokenError" ||
+      error.name === "TokenExpiredError" ||
+      error.name === "NotBeforeError"
+    ) {
+      return res.status(401).json({
+        error: "Invalid or expired token"
+      });
+    }
+
+    console.error("Admin verification:", error.message);
+
+    return res.status(500).json({
+      error: "Could not verify admin"
+    });
+  }
 }
 
 // ==========================================
@@ -560,6 +627,254 @@ app.post("/api/auth/login", async (req, res) => {
 
     res.status(500).json({
       error: "Could not log in",
+    });
+  }
+});
+
+
+// ADMIN LOGIN
+
+app.post("/api/admin/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  if (
+    typeof email !== "string" ||
+    typeof password !== "string" ||
+    !email.trim() ||
+    !password
+  ) {
+    return res.status(400).json({
+      error: "Email and password are required"
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT id, name, email, password_hash
+       FROM admins
+       WHERE email = $1 AND is_active = TRUE`,
+      [email.trim().toLowerCase()]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        error: "Invalid admin credentials"
+      });
+    }
+
+    const admin = result.rows[0];
+
+    const isValid = await bcrypt.compare(
+      password,
+      admin.password_hash
+    );
+
+    if (!isValid) {
+      return res.status(401).json({
+        error: "Invalid admin credentials"
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        adminId: admin.id,
+        type: "admin"
+      },
+      process.env.JWT_SECRET,
+      {
+        algorithm: "HS256",
+        expiresIn: "8h"
+      }
+    );
+
+    res.json({
+      message: "Admin login successful",
+      token,
+      admin: {
+        id: admin.id,
+        name: admin.name,
+        email: admin.email
+      }
+    });
+
+  } catch (error) {
+    console.error("Admin login:", error.message);
+
+    res.status(500).json({
+      error: "Admin login failed"
+    });
+  }
+});
+
+
+// ADMIN - GET ALL COMPLAINTS
+
+app.get("/api/admin/issues", verifyAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        i.id,
+        i.tracking_id,
+        i.title,
+        i.category,
+        i.description,
+        i.department,
+        i.photo_url,
+        i.status,
+        i.city,
+        i.latitude,
+        i.longitude,
+        i.created_at,
+        i.resolved_at,
+        u.name AS reported_by
+      FROM issues i
+      LEFT JOIN users u ON i.user_id = u.id
+      ORDER BY i.created_at DESC, i.id DESC
+    `);
+
+    res.json(result.rows);
+
+  } catch (error) {
+    console.error("Admin get issues:", error.message);
+
+    res.status(500).json({
+      error: "Failed to fetch complaints"
+    });
+  }
+});
+
+
+// ADMIN - UPDATE COMPLAINT
+
+app.patch(
+  "/api/admin/issues/:id",
+  verifyAdmin,
+  async (req, res) => {
+    const { status, department } = req.body;
+
+    const validStatuses = [
+      "Pending",
+      "In Progress",
+      "Resolved"
+    ];
+
+    const issueId = Number(req.params.id);
+
+    if (!Number.isSafeInteger(issueId) || issueId <= 0) {
+      return res.status(400).json({
+        error: "Invalid complaint ID"
+      });
+    }
+
+    if (
+      status === undefined &&
+      department === undefined
+    ) {
+      return res.status(400).json({
+        error: "Provide status or department"
+      });
+    }
+
+    if (
+      status !== undefined &&
+      !validStatuses.includes(status)
+    ) {
+      return res.status(400).json({
+        error: "Invalid complaint status"
+      });
+    }
+
+    if (
+      department !== undefined &&
+      !AUTHORITIES.includes(department)
+    ) {
+      return res.status(400).json({
+        error: "Invalid department"
+      });
+    }
+
+    try {
+      const result = await pool.query(
+        `
+        UPDATE issues
+        SET
+          status = COALESCE($1, status),
+          department = COALESCE($2, department),
+          resolved_at = CASE
+            WHEN $1::varchar = 'Resolved'
+              AND status <> 'Resolved'
+              THEN CURRENT_TIMESTAMP
+
+            WHEN $1::varchar IS NOT NULL
+              AND $1::varchar <> 'Resolved'
+              THEN NULL
+
+            ELSE resolved_at
+          END
+        WHERE id = $3
+        RETURNING *
+        `,
+        [
+          status ?? null,
+          department ?? null,
+          issueId
+        ]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          error: "Complaint not found"
+        });
+      }
+
+      res.json({
+        message: "Complaint updated successfully",
+        issue: result.rows[0]
+      });
+
+    } catch (error) {
+      console.error("Update complaint:", error.message);
+
+      res.status(500).json({
+        error: "Failed to update complaint"
+      });
+    }
+  }
+);
+
+
+// ADMIN - GET REGISTERED USERS
+
+app.get("/api/admin/users", verifyAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        u.id,
+        u.name,
+        u.email,
+        u.gender,
+        u.mobile,
+        u.created_at,
+        COUNT(i.id)::int AS total_complaints
+      FROM users u
+      LEFT JOIN issues i ON i.user_id = u.id
+      GROUP BY
+        u.id,
+        u.name,
+        u.email,
+        u.gender,
+        u.mobile,
+        u.created_at
+      ORDER BY u.created_at DESC
+    `);
+
+    res.json(result.rows);
+
+  } catch (error) {
+    console.error("Admin get users:", error.message);
+
+    res.status(500).json({
+      error: "Failed to fetch users"
     });
   }
 });
