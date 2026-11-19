@@ -8,6 +8,7 @@ import {
   Marker,
   Popup,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 
 import "leaflet/dist/leaflet.css";
@@ -19,9 +20,11 @@ const API = "http://localhost:5001/api";
 // This key only remembers the UI's logged-in user for the current browser.
 const SESSION_KEY = "cw_session";
 
-// Sample authorities used for the complaint dropdown.
-// The backend API remains the primary source; this list is a fallback.
-const DEFAULT_AUTHORITIES = [
+// Default map view: India
+const INDIA_CENTER = [22.9734, 78.6569];
+const INDIA_ZOOM = 5;
+
+const AUTHORITIES = [
   "Municipal Corporation",
   "Public Works Department (PWD)",
   "Traffic Police Department",
@@ -36,9 +39,23 @@ const DEFAULT_AUTHORITIES = [
   "Fire and Emergency Services",
 ];
 
-// Default map view: India
-const INDIA_CENTER = [22.9734, 78.6569];
-const INDIA_ZOOM = 5;
+// Clicking the map selects a complaint location.
+function LocationClickHandler({ onSelect }) {
+  useMapEvents({
+    click(event) {
+      onSelect({ lat: event.latlng.lat, lng: event.latlng.lng });
+    },
+  });
+  return null;
+}
+
+function LocationMapUpdater({ position }) {
+  const map = useMap();
+  useEffect(() => {
+    if (position) map.setView(position, Math.max(map.getZoom(), 15));
+  }, [map, position]);
+  return null;
+}
 
 // Automatically position the map based on available issue locations.
 function MapViewport({ points }) {
@@ -64,9 +81,6 @@ function App() {
   const [page, setPage] = useState("home");
   const [issues, setIssues] = useState([]);
   const [dash, setDash] = useState(null);
-  const [authorities, setAuthorities] = useState([]);
-  const [complaintBusy, setComplaintBusy] = useState(false);
-  const [complaintMsg, setComplaintMsg] = useState({ type: "", text: "" });
 
   const [user, setUser] = useState(() => {
     try {
@@ -86,6 +100,16 @@ function App() {
 
   const [trackId, setTrackId] = useState("");
   const [tracked, setTracked] = useState(null);
+  const [complaint, setComplaint] = useState({
+    title: "",
+    description: "",
+    authority: "",
+    latitude: null,
+    longitude: null,
+  });
+  const [complaintPhoto, setComplaintPhoto] = useState(null);
+  const [complaintBusy, setComplaintBusy] = useState(false);
+  const [complaintMessage, setComplaintMessage] = useState({ type: "", text: "" });
 
   const loadIssues = () =>
     axios
@@ -102,9 +126,6 @@ function App() {
   useEffect(() => {
     loadIssues();
     loadDash();
-    axios.get(API + "/authorities")
-      .then((response) => setAuthorities(response.data))
-      .catch(() => setAuthorities(DEFAULT_AUTHORITIES));
   }, []);
 
   // Keep only issues with valid geographic coordinates.
@@ -159,35 +180,6 @@ function App() {
       setTracked({
         error: "No issue found with this tracking ID",
       });
-    }
-  }
-
-  async function submitComplaint(event) {
-    event.preventDefault();
-    if (complaintBusy) return;
-
-    setComplaintMsg({ type: "", text: "" });
-    const complaintForm = event.currentTarget;
-    const formData = new FormData(complaintForm);
-    // The backend verifies this ID exists; anonymous submissions send no userId.
-    if (user?.id) formData.append("userId", user.id);
-
-    setComplaintBusy(true);
-    try {
-      const response = await axios.post(API + "/issues", formData);
-      setComplaintMsg({
-        type: "success",
-        text: `Complaint submitted successfully. Your tracking ID is ${response.data.tracking_id}.`,
-      });
-      complaintForm.reset();
-      await Promise.all([loadIssues(), loadDash()]);
-    } catch (error) {
-      setComplaintMsg({
-        type: "error",
-        text: error.response?.data?.error || "Could not submit complaint. Please try again.",
-      });
-    } finally {
-      setComplaintBusy(false);
     }
   }
 
@@ -267,7 +259,7 @@ function App() {
         text:
           error.response?.data?.error ||
           (error.request
-            ? "Cannot connect to the backend. Check that it is running on port 5001."
+            ? "Cannot connect to the backend. Check that it is running on port 5000."
             : "Signup failed. Please try again."),
       });
     } finally {
@@ -300,7 +292,7 @@ function App() {
         text:
           error.response?.data?.error ||
           (error.request
-            ? "Cannot connect to the backend. Check that it is running on port 5001."
+            ? "Cannot connect to the backend. Check that it is running on port 5000."
             : "Login failed. Please try again."),
       });
     } finally {
@@ -312,6 +304,80 @@ function App() {
     localStorage.removeItem(SESSION_KEY);
     setUser(null);
     go("home");
+  }
+
+  function updateComplaintLocation(location) {
+    setComplaint((current) => ({
+      ...current,
+      latitude: Number(location.lat.toFixed(7)),
+      longitude: Number(location.lng.toFixed(7)),
+    }));
+  }
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) {
+      setComplaintMessage({ type: "error", text: "Geolocation is not supported by this browser." });
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => updateComplaintLocation({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      }),
+      (error) => setComplaintMessage({
+        type: "error",
+        text: error.code === 1
+          ? "Location permission was denied. You can select the location manually on the map."
+          : "Could not get your current location. Please select it on the map.",
+      }),
+      { enableHighAccuracy: true, timeout: 12000 }
+    );
+  }
+
+  async function submitComplaint(event) {
+    event.preventDefault();
+    // Keep a stable reference: React clears event.currentTarget after the
+    // submit event finishes, including while this async function is awaiting.
+    const formElement = event.currentTarget;
+    if (complaintBusy) return;
+
+    if (complaint.latitude === null || complaint.longitude === null) {
+      setComplaintMessage({ type: "error", text: "Please select the complaint location on the map." });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("title", complaint.title.trim());
+    formData.append("description", complaint.description.trim());
+    formData.append("authority", complaint.authority);
+    formData.append("latitude", String(complaint.latitude));
+    formData.append("longitude", String(complaint.longitude));
+    if (user?.id) formData.append("userId", String(user.id));
+    if (complaintPhoto) formData.append("photo", complaintPhoto);
+
+    setComplaintBusy(true);
+    setComplaintMessage({ type: "", text: "" });
+    try {
+      const response = await axios.post(API + "/issues", formData);
+      const created = response.data;
+      setComplaintMessage({
+        type: "success",
+        text: `Complaint submitted successfully. Tracking ID: ${created.tracking_id}`,
+      });
+      setComplaint({ title: "", description: "", authority: "", latitude: null, longitude: null });
+      setComplaintPhoto(null);
+      const photoInput = formElement.querySelector('input[type="file"]');
+      if (photoInput) photoInput.value = "";
+      await Promise.all([loadIssues(), loadDash()]);
+    } catch (error) {
+      setComplaintMessage({
+        type: "error",
+        text: error.response?.data?.error || "Could not submit complaint. Check that the backend is running.",
+      });
+    } finally {
+      setComplaintBusy(false);
+    }
   }
 
   const statusClass = (status) =>
@@ -388,6 +454,9 @@ function App() {
             >
               View Public Map
             </button>
+            <button className="primary" onClick={() => go("report")}>
+              Report a Problem
+            </button>
 
             <div className="cards">
               <div>
@@ -408,69 +477,123 @@ function App() {
           </section>
         )}
 
-        {/* SUBMIT COMPLAINT */}
+        {/* REPORT A PROBLEM */}
         {page === "report" && (
-          <section className="authpage">
+          <section>
+            <h2>Submit a Complaint</h2>
+            <p className="map-description">
+              Describe the civic issue, select the responsible authority, and pin its exact location on the map.
+              {user ? ` Signed in as ${user.name}.` : " You can submit anonymously."}
+            </p>
+
             <form className="form complaint-form" onSubmit={submitComplaint}>
-              <h2>Report a civic issue</h2>
-              <p className="muted">
-                Submit a complaint with details and forward it to the relevant authority.
-                {user ? ` Submitting as ${user.name}.` : " You can submit anonymously without logging in."}
-              </p>
-
               <label>
-                Complaint title
+                Complaint title *
                 <input
-                  name="title"
-                  type="text"
+                  value={complaint.title}
+                  onChange={(event) => setComplaint({ ...complaint, title: event.target.value })}
                   maxLength={200}
-                  placeholder="e.g. Large pothole near main road"
+                  placeholder="e.g. Large pothole on Main Road"
                   required
                 />
               </label>
 
               <label>
-                Description
+                Description *
                 <textarea
-                  name="description"
-                  rows={5}
-                  placeholder="Describe the issue, its location and how it affects people..."
+                  value={complaint.description}
+                  onChange={(event) => setComplaint({ ...complaint, description: event.target.value })}
+                  placeholder="Explain the issue and any useful details..."
                   required
                 />
               </label>
 
               <label>
-                Upload photo (optional)
-                <input
-                  name="photo"
-                  type="file"
-                  accept="image/*"
-                />
-                <span className="field-help">Image files only. Maximum size: 5 MB.</span>
-              </label>
-
-              <label>
-                Forward complaint to
-                <select name="authority" required defaultValue="">
-                  <option value="" disabled>Select an authority</option>
-                  {authorities.map((authority) => (
+                Forward complaint to authority *
+                <select
+                  value={complaint.authority}
+                  onChange={(event) => setComplaint({ ...complaint, authority: event.target.value })}
+                  required
+                >
+                  <option value="">-- Select Authority --</option>
+                  {AUTHORITIES.map((authority) => (
                     <option key={authority} value={authority}>{authority}</option>
                   ))}
                 </select>
               </label>
 
-              {complaintMsg.text && (
-                <div className={"authmsg " + complaintMsg.type} role="status">
-                  {complaintMsg.text}
+              <label>
+                Upload a photo (optional, max 5 MB)
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={(event) => setComplaintPhoto(event.target.files?.[0] || null)}
+                />
+              </label>
+
+              <div className="location-picker-heading">
+                <div>
+                  <h3>Choose Complaint Location *</h3>
+                  <p className="muted">Click the map to place a pin, or drag the pin to adjust it.</p>
+                </div>
+                <button type="button" onClick={useCurrentLocation}>Use My Current Location</button>
+              </div>
+
+              <div className="map report-map">
+                <MapContainer
+                  center={complaint.latitude !== null
+                    ? [complaint.latitude, complaint.longitude]
+                    : [19.076, 72.8777]}
+                  zoom={complaint.latitude !== null ? 15 : 11}
+                  scrollWheelZoom
+                  style={{ height: "100%", width: "100%" }}
+                >
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    maxZoom={19}
+                  />
+                  <LocationClickHandler onSelect={updateComplaintLocation} />
+                  <LocationMapUpdater
+                    position={complaint.latitude !== null
+                      ? [complaint.latitude, complaint.longitude]
+                      : null}
+                  />
+                  {complaint.latitude !== null && (
+                    <Marker
+                      position={[complaint.latitude, complaint.longitude]}
+                      draggable
+                      eventHandlers={{
+                        dragend: (event) => {
+                          const point = event.target.getLatLng();
+                          updateComplaintLocation(point);
+                        },
+                      }}
+                    >
+                      <Popup>Selected complaint location</Popup>
+                    </Marker>
+                  )}
+                </MapContainer>
+              </div>
+
+              {complaint.latitude !== null ? (
+                <div className="coordinates-box">
+                  <span><b>Latitude:</b> {complaint.latitude}</span>
+                  <span><b>Longitude:</b> {complaint.longitude}</span>
+                </div>
+              ) : (
+                <p className="muted">No location selected yet. Select a point on the map.</p>
+              )}
+
+              {complaintMessage.text && (
+                <div className={`authmsg ${complaintMessage.type}`} role="alert">
+                  {complaintMessage.text}
                 </div>
               )}
 
-              <button className="primary" type="submit" disabled={complaintBusy || authorities.length === 0}>
-                {complaintBusy ? "Submitting..." : "Submit complaint"}
+              <button className="primary" type="submit" disabled={complaintBusy}>
+                {complaintBusy ? "Submitting..." : "Submit Complaint"}
               </button>
-              {authorities.length === 0 && (
-                <p className="field-help">Authorities could not be loaded. Please check that the backend is running.</p>
-              )}
             </form>
           </section>
         )}
@@ -512,7 +635,7 @@ function App() {
                   >
                     <Popup>
                       <div className="issue-popup">
-                        <h3>{issue.title || issue.category || "Civic issue"}</h3>
+                        <h3>{issue.category || "Civic issue"}</h3>
 
                         <p>
                           {issue.description || "No description provided."}
@@ -661,7 +784,7 @@ function App() {
                   <p>{tracked.error}</p>
                 ) : (
                   <>
-                    <h3>{tracked.title || tracked.category}</h3>
+                    <h3>{tracked.category}</h3>
                     <p>{tracked.description}</p>
 
                     <p>
