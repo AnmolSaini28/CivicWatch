@@ -132,7 +132,7 @@ async function verifyAdmin(req, res, next) {
     }
 
     const result = await pool.query(
-      `SELECT id, name, email
+      `SELECT id, name, email, admin_level, state, district, city, block
        FROM admins
        WHERE id = $1 AND is_active = TRUE`,
       [decoded.adminId]
@@ -650,7 +650,7 @@ app.post("/api/admin/login", async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT id, name, email, password_hash
+      `SELECT id, name, email, password_hash, admin_level, state, district, city, block
        FROM admins
        WHERE email = $1 AND is_active = TRUE`,
       [email.trim().toLowerCase()]
@@ -693,7 +693,12 @@ app.post("/api/admin/login", async (req, res) => {
       admin: {
         id: admin.id,
         name: admin.name,
-        email: admin.email
+        email: admin.email,
+        admin_level: admin.admin_level || "CITY",
+        state: admin.state,
+        district: admin.district,
+        city: admin.city,
+        block: admin.block
       }
     });
 
@@ -707,10 +712,31 @@ app.post("/api/admin/login", async (req, res) => {
 });
 
 
-// ADMIN - GET ALL COMPLAINTS
+// ADMIN - GET ALL COMPLAINTS (Scoped to Admin Hierarchy Level)
 
 app.get("/api/admin/issues", verifyAdmin, async (req, res) => {
   try {
+    const scope = req.query.scope; // optional '?scope=all'
+    let whereClause = "WHERE 1=1";
+    const params = [];
+
+    if (scope !== "all") {
+      const level = req.admin.admin_level || "CITY";
+      if (level === "BLOCK" && req.admin.block) {
+        params.push(req.admin.block);
+        whereClause += ` AND i.block = $${params.length}`;
+      } else if (level === "CITY" && req.admin.city) {
+        params.push(req.admin.city);
+        whereClause += ` AND i.city = $${params.length}`;
+      } else if (level === "DISTRICT" && req.admin.district) {
+        params.push(req.admin.district);
+        whereClause += ` AND i.district = $${params.length}`;
+      } else if (level === "STATE" && req.admin.state) {
+        params.push(req.admin.state);
+        whereClause += ` AND i.state = $${params.length}`;
+      }
+    }
+
     const result = await pool.query(`
       SELECT
         i.id,
@@ -721,7 +747,11 @@ app.get("/api/admin/issues", verifyAdmin, async (req, res) => {
         i.department,
         i.photo_url,
         i.status,
+        i.state,
+        i.district,
         i.city,
+        i.block,
+        i.pincode,
         i.latitude,
         i.longitude,
         i.created_at,
@@ -729,8 +759,9 @@ app.get("/api/admin/issues", verifyAdmin, async (req, res) => {
         u.name AS reported_by
       FROM issues i
       LEFT JOIN users u ON i.user_id = u.id
+      ${whereClause}
       ORDER BY i.created_at DESC, i.id DESC
-    `);
+    `, params);
 
     res.json(result.rows);
 
@@ -901,6 +932,81 @@ app.use((error, _req, res, _next) => {
 });
 
 // ==========================================
+// DATABASE AUTO-INITIALIZATION & SEED
+// ==========================================
+
+async function initDatabase() {
+  try {
+    // 1. Ensure admins table and geographic columns exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS admins (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        admin_level VARCHAR(30) NOT NULL DEFAULT 'CITY',
+        state VARCHAR(100),
+        district VARCHAR(100),
+        city VARCHAR(100),
+        block VARCHAR(100),
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      ALTER TABLE admins ADD COLUMN IF NOT EXISTS admin_level VARCHAR(30) DEFAULT 'CITY';
+      ALTER TABLE admins ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+      ALTER TABLE admins ADD COLUMN IF NOT EXISTS district VARCHAR(100);
+      ALTER TABLE admins ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+      ALTER TABLE admins ADD COLUMN IF NOT EXISTS block VARCHAR(100);
+
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Maharashtra';
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS district VARCHAR(100) DEFAULT 'Mumbai Suburban';
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS block VARCHAR(100) DEFAULT 'Powai';
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS pincode VARCHAR(10);
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS photo_url TEXT;
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS user_id INTEGER;
+    `);
+
+    // 2. Ensure default demo admin accounts exist with known password
+    const defaultPassword = process.env.ADMIN_PASSWORD || "Admin@12345678";
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
+    const demoAdmins = [
+      { name: "System Administrator", email: "admin@civicwatch.gov.in", level: "NATIONAL" },
+      { name: "National Nodal Officer (MoHUA)", email: "national@civicwatch.gov.in", level: "NATIONAL" },
+      { name: "Maharashtra Urban Development", email: "state.mh@civicwatch.gov.in", level: "STATE", state: "Maharashtra" },
+      { name: "Municipal Corp of Greater Mumbai", email: "admin.mumbai@civicwatch.gov.in", level: "CITY", state: "Maharashtra", district: "Mumbai Suburban", city: "Mumbai" },
+      { name: "Powai Ward-S Officer", email: "ward.powai@civicwatch.gov.in", level: "BLOCK", state: "Maharashtra", district: "Mumbai Suburban", city: "Mumbai", block: "Powai" },
+    ];
+
+    for (const a of demoAdmins) {
+      const existing = await pool.query("SELECT id FROM admins WHERE email = $1", [a.email]);
+      if (existing.rows.length === 0) {
+        await pool.query(
+          `INSERT INTO admins (name, email, password_hash, admin_level, state, district, city, block, is_active)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)`,
+          [a.name, a.email, passwordHash, a.level, a.state || null, a.district || null, a.city || null, a.block || null]
+        );
+      } else {
+        await pool.query(
+          `UPDATE admins 
+           SET password_hash = $1, admin_level = $2, is_active = TRUE 
+           WHERE email = $3`,
+          [passwordHash, a.level, a.email]
+        );
+      }
+    }
+
+    console.log("✓ Admin accounts and tables verified");
+
+  } catch (err) {
+    console.error("Database initialization notice:", err.message);
+  }
+}
+
+// ==========================================
 // START SERVER
 // ==========================================
 
@@ -909,6 +1015,8 @@ async function startServer() {
     await pool.query("SELECT NOW()");
 
     console.log("Connected to PostgreSQL");
+
+    await initDatabase();
 
     app.listen(PORT, "0.0.0.0", () => {
       console.log(

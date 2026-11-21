@@ -18,41 +18,106 @@ async function migrate() {
   `);
   console.log("✓ 'admins' table verified/created");
 
-  // 2. Add missing columns to issues table
+  // 2. Add missing columns to issues, admins and users tables
   await pool.query(`
-    ALTER TABLE issues ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Maharashtra';
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS district VARCHAR(100) DEFAULT 'Mumbai Suburban';
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS block VARCHAR(100) DEFAULT 'Powai';
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS pincode VARCHAR(10);
     ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
     ALTER TABLE issues ADD COLUMN IF NOT EXISTS title VARCHAR(200);
     ALTER TABLE issues ADD COLUMN IF NOT EXISTS photo_url TEXT;
     ALTER TABLE issues ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
-  `);
-  console.log("✓ 'issues' table columns verified/updated");
 
-  // Populate city for existing issues that have NULL city
+    ALTER TABLE admins ADD COLUMN IF NOT EXISTS admin_level VARCHAR(30) DEFAULT 'CITY';
+    ALTER TABLE admins ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+    ALTER TABLE admins ADD COLUMN IF NOT EXISTS district VARCHAR(100);
+    ALTER TABLE admins ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+    ALTER TABLE admins ADD COLUMN IF NOT EXISTS block VARCHAR(100);
+
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Maharashtra';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
+  `);
+  console.log("✓ Geographic hierarchy columns verified/updated");
+
+  // Populate city/state for existing issues that have NULL
   await pool.query(`
     UPDATE issues SET city = 'Mumbai' WHERE city IS NULL;
+    UPDATE issues SET state = 'Maharashtra' WHERE state IS NULL;
+    UPDATE issues SET district = 'Mumbai Suburban' WHERE district IS NULL;
+    UPDATE issues SET block = 'Powai' WHERE block IS NULL;
   `);
 
-  // 3. Create or update default admin account
-  const defaultEmail = "admin@civicwatch.gov.in";
+  // 3. Seed Hierarchical Admin Accounts (National, State, City, Block)
   const defaultPassword = process.env.ADMIN_PASSWORD || "Admin@12345678";
-  const defaultName = process.env.ADMIN_NAME || "System Administrator";
+  const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-  const existingAdmin = await pool.query(
-    "SELECT id, email FROM admins WHERE email = $1",
-    [defaultEmail]
-  );
+  const demoAdmins = [
+    {
+      name: "National Nodal Officer (MoHUA)",
+      email: "national@civicwatch.gov.in",
+      level: "NATIONAL",
+      state: null,
+      district: null,
+      city: null,
+      block: null,
+    },
+    {
+      name: "Maharashtra Urban Development",
+      email: "state.mh@civicwatch.gov.in",
+      level: "STATE",
+      state: "Maharashtra",
+      district: null,
+      city: null,
+      block: null,
+    },
+    {
+      name: "Municipal Corp of Greater Mumbai",
+      email: "admin.mumbai@civicwatch.gov.in",
+      level: "CITY",
+      state: "Maharashtra",
+      district: "Mumbai Suburban",
+      city: "Mumbai",
+      block: null,
+    },
+    {
+      name: "Powai Ward-S Officer",
+      email: "ward.powai@civicwatch.gov.in",
+      level: "BLOCK",
+      state: "Maharashtra",
+      district: "Mumbai Suburban",
+      city: "Mumbai",
+      block: "Powai",
+    },
+    {
+      name: "System Administrator",
+      email: "admin@civicwatch.gov.in",
+      level: "NATIONAL",
+      state: null,
+      district: null,
+      city: null,
+      block: null,
+    },
+  ];
 
-  if (existingAdmin.rows.length === 0) {
-    const passwordHash = await bcrypt.hash(defaultPassword, 10);
-    await pool.query(
-      `INSERT INTO admins (name, email, password_hash, is_active)
-       VALUES ($1, $2, $3, TRUE)`,
-      [defaultName, defaultEmail, passwordHash]
-    );
-    console.log(`✓ Created default admin: ${defaultEmail} (Password: ${defaultPassword})`);
-  } else {
-    console.log(`✓ Admin already exists: ${defaultEmail}`);
+  for (const a of demoAdmins) {
+    const existing = await pool.query("SELECT id FROM admins WHERE email = $1", [a.email]);
+    if (existing.rows.length === 0) {
+      await pool.query(
+        `INSERT INTO admins (name, email, password_hash, admin_level, state, district, city, block, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)`,
+        [a.name, a.email, passwordHash, a.level, a.state, a.district, a.city, a.block]
+      );
+      console.log(`✓ Created admin: ${a.email} (${a.level})`);
+    } else {
+      await pool.query(
+        `UPDATE admins 
+         SET admin_level = $1, state = $2, district = $3, city = $4, block = $5
+         WHERE email = $6`,
+        [a.level, a.state, a.district, a.city, a.block, a.email]
+      );
+    }
   }
 
   // Check complaint counts
