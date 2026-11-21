@@ -155,6 +155,9 @@ export default function AdminDashboard({
   // Temporary changes made in complaint table.
   const [draftUpdates, setDraftUpdates] = useState({});
 
+  // Selected complaint for detail modal.
+  const [selectedIssue, setSelectedIssue] = useState(null);
+
   // Load data from protected admin APIs.
   async function loadData() {
     if (!token) {
@@ -368,8 +371,8 @@ export default function AdminDashboard({
   }, [filteredIssues, search]);
 
   // Save complaint status or department.
-  async function saveComplaint(issue) {
-    const changes = draftUpdates[issue.id];
+  async function saveComplaint(issue, overrideChanges) {
+    const changes = overrideChanges || draftUpdates[issue.id];
 
     if (!changes) return;
 
@@ -729,6 +732,7 @@ export default function AdminDashboard({
                     setDraftUpdates={setDraftUpdates}
                     saveComplaint={saveComplaint}
                     departments={departments}
+                    onSelectIssue={setSelectedIssue}
                   />
                 </section>
 
@@ -747,6 +751,34 @@ export default function AdminDashboard({
                   </button>
                 </div>
 
+                <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
+                  {[
+                    ["All", ""],
+                    ["🟠 Pending", "Pending"],
+                    ["🔵 In Progress", "In Progress"],
+                    ["🟢 Resolved", "Resolved"],
+                  ].map(([label, val]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => updateFilter("status", val)}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: "20px",
+                        border: "1px solid",
+                        borderColor: filters.status === val ? "#0b3d2e" : "#d8e0db",
+                        background: filters.status === val ? "#0b3d2e" : "#ffffff",
+                        color: filters.status === val ? "#ffffff" : "#334155",
+                        fontWeight: "600",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
                 <input
                   className="cw-search"
                   placeholder="Search issue ID, title, city..."
@@ -760,6 +792,7 @@ export default function AdminDashboard({
                   setDraftUpdates={setDraftUpdates}
                   saveComplaint={saveComplaint}
                   departments={departments}
+                  onSelectIssue={setSelectedIssue}
                 />
 
               </section>
@@ -1101,6 +1134,7 @@ export default function AdminDashboard({
                     setDraftUpdates={setDraftUpdates}
                     saveComplaint={saveComplaint}
                     departments={departments}
+                    onSelectIssue={setSelectedIssue}
                   />
                 </section>
 
@@ -1108,6 +1142,129 @@ export default function AdminDashboard({
             )}
 
           </>
+        )}
+
+        {selectedIssue && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.6)",
+              backdropFilter: "blur(2px)",
+              display: "grid",
+              placeItems: "center",
+              zIndex: 9999,
+              padding: "20px",
+            }}
+            onClick={() => setSelectedIssue(null)}
+          >
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: "10px",
+                maxWidth: "600px",
+                width: "100%",
+                maxHeight: "90vh",
+                overflowY: "auto",
+                padding: "24px",
+                boxShadow: "0 20px 25px -5px rgba(0,0,0,0.2)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid #e2e8f0", paddingBottom: "12px", marginBottom: "16px" }}>
+                <div>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "#0b3d2e", letterSpacing: "0.5px" }}>{selectedIssue.tracking_id}</span>
+                  <h2 style={{ margin: "4px 0 0", fontSize: "18px" }}>{selectedIssue.title}</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIssue(null)}
+                  style={{ background: "transparent", border: "none", fontSize: "22px", cursor: "pointer", color: "#64748b" }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {selectedIssue.photo_url ? (
+                <div style={{ width: "100%", maxHeight: "280px", borderRadius: "8px", overflow: "hidden", marginBottom: "16px", background: "#0f172a", textAlign: "center" }}>
+                  <img
+                    src={`http://localhost:5001${selectedIssue.photo_url}`}
+                    alt="Proof"
+                    style={{ maxHeight: "280px", maxWidth: "100%", objectFit: "contain" }}
+                  />
+                </div>
+              ) : (
+                <div style={{ padding: "20px", background: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1", textAlign: "center", color: "#64748b", marginBottom: "16px", fontSize: "13px" }}>
+                  📷 No photo uploaded for this report.
+                </div>
+              )}
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px", marginBottom: "16px" }}>
+                <div><strong>Status:</strong> <span className={`cw-status-select ${selectedIssue.status.toLowerCase().replace(/\s+/g, "")}`} style={{ padding: "3px 8px", borderRadius: "10px" }}>{selectedIssue.status}</span></div>
+                <div><strong>Department:</strong> {selectedIssue.department}</div>
+                <div><strong>Location:</strong> {selectedIssue.city || "City not specified"}</div>
+                <div><strong>Reported By:</strong> {selectedIssue.reported_by || "Anonymous Citizen"}</div>
+                <div><strong>Reported Date:</strong> {formatDate(selectedIssue.created_at)}</div>
+                <div><strong>Resolved Date:</strong> {formatDate(selectedIssue.resolved_at)}</div>
+              </div>
+
+              <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "6px", marginBottom: "16px" }}>
+                <strong style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "4px" }}>Description:</strong>
+                <p style={{ margin: 0, fontSize: "13px", color: "#1e293b", whiteSpace: "pre-wrap" }}>{selectedIssue.description || "No description provided."}</p>
+              </div>
+
+              {selectedIssue.latitude && selectedIssue.longitude && (
+                <div style={{ marginBottom: "16px", fontSize: "12px" }}>
+                  <strong>GPS Coordinates:</strong> {selectedIssue.latitude}, {selectedIssue.longitude}{" "}
+                  <a
+                    href={`https://www.google.com/maps?q=${selectedIssue.latitude},${selectedIssue.longitude}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: "#2563eb", marginLeft: "6px" }}
+                  >
+                    View on Google Maps ↗
+                  </a>
+                </div>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #e2e8f0", paddingTop: "14px" }}>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  {selectedIssue.status !== "In Progress" && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await saveComplaint({ ...selectedIssue }, { status: "In Progress" });
+                        setSelectedIssue((prev) => ({ ...prev, status: "In Progress" }));
+                      }}
+                      style={{ padding: "7px 12px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: "5px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}
+                    >
+                      Mark In Progress
+                    </button>
+                  )}
+                  {selectedIssue.status !== "Resolved" && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await saveComplaint({ ...selectedIssue }, { status: "Resolved" });
+                        setSelectedIssue((prev) => ({ ...prev, status: "Resolved", resolved_at: new Date().toISOString() }));
+                      }}
+                      style={{ padding: "7px 12px", background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0", borderRadius: "5px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}
+                    >
+                      ✓ Mark Resolved
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedIssue(null)}
+                  style={{ padding: "7px 14px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "5px", cursor: "pointer", fontSize: "12px" }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         <footer className="cw-footer">
@@ -1271,6 +1428,7 @@ function ComplaintTable({
   setDraftUpdates,
   saveComplaint,
   departments,
+  onSelectIssue,
 }) {
   return (
     <div className="cw-table-wrap">
@@ -1279,6 +1437,7 @@ function ComplaintTable({
         <thead>
           <tr>
             <th>Issue ID</th>
+            <th>Photo</th>
             <th>Issue / Location</th>
             <th>Department</th>
             <th>Date</th>
@@ -1303,6 +1462,22 @@ function ComplaintTable({
 
                 <td>
                   <strong>{issue.tracking_id}</strong>
+                </td>
+
+                <td>
+                  {issue.photo_url ? (
+                    <img
+                      src={`http://localhost:5001${issue.photo_url}`}
+                      alt="Proof"
+                      style={{ width: "36px", height: "36px", objectFit: "cover", borderRadius: "5px", cursor: "pointer", border: "1px solid #d8e0db" }}
+                      onClick={() => onSelectIssue && onSelectIssue(issue)}
+                      title="Click to view photo"
+                    />
+                  ) : (
+                    <div style={{ width: "36px", height: "36px", borderRadius: "5px", background: "#f1f5f9", display: "grid", placeItems: "center", fontSize: "14px", color: "#94a3b8" }}>
+                      📷
+                    </div>
+                  )}
                 </td>
 
                 <td>
@@ -1366,6 +1541,15 @@ function ComplaintTable({
                 </td>
 
                 <td>
+                  {onSelectIssue && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectIssue(issue)}
+                      style={{ marginRight: "6px", padding: "6px 10px", background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0", borderRadius: "5px", cursor: "pointer", fontWeight: "600", fontSize: "11px" }}
+                    >
+                      View
+                    </button>
+                  )}
                   <button
                     className="cw-save-button"
                     disabled={!draftUpdates[issue.id]}
@@ -1381,7 +1565,7 @@ function ComplaintTable({
 
           {issues.length === 0 && (
             <tr>
-              <td colSpan="6">
+              <td colSpan="7">
                 No complaints found.
               </td>
             </tr>
