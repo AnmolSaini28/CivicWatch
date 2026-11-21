@@ -13,6 +13,8 @@ import {
 import "leaflet/dist/leaflet.css";
 import "./styles.css";
 
+import AdminDashboard from "./AdminDashboard";
+
 const API = "http://localhost:5001/api";
 
 // Embedded hero illustration so the project keeps its original file structure.
@@ -227,6 +229,17 @@ function App() {
   useEffect(() => {
     localStorage.setItem("cw_language", language);
   }, [language]);
+
+  useEffect(() => {
+    const checkHash = () => {
+      if (window.location.hash === "#admin") {
+        setPage("admin");
+      }
+    };
+    checkHash();
+    window.addEventListener("hashchange", checkHash);
+    return () => window.removeEventListener("hashchange", checkHash);
+  }, []);
   const [issues, setIssues] = useState([]);
   const [dash, setDash] = useState(null);
   const [user, setUser] = useState(() => {
@@ -553,9 +566,30 @@ function App() {
               </button>
             </>
           )}
+
+          <button
+            onClick={() => go("admin")}
+            className={page === "admin" ? "active" : ""}
+            style={{
+              fontWeight: "700",
+              color: "#0b3d2e",
+              background: "#dcfce7",
+              border: "1px solid #bbf7d0",
+              borderRadius: "6px",
+              padding: "7px 12px",
+              cursor: "pointer",
+            }}
+            title="Municipal Admin Portal"
+          >
+            🛡️ {language === "hi" ? "एडमिन" : "Admin"}
+          </button>
         </div>
       </nav>
     );
+  }
+
+  if (page === "admin") {
+    return <AdminDashboard onLogout={() => go("home")} />;
   }
   return (
     <>
@@ -990,7 +1024,7 @@ function App() {
         )}
       </main>
       <footer className="site-footer">
-        <div className="footer-inner"><div><b className="footer-brand">✳ CivicWatch</b><p>{t("footerAbout")}</p></div><div className="footer-links"><button onClick={() => go("home")}>{t("home")}</button><button onClick={() => go("map")}>{t("map")}</button><button onClick={() => go("track")}>{t("track")}</button><button onClick={() => go("report")}>{t("reportIssue")}</button></div></div>
+        <div className="footer-inner"><div><b className="footer-brand">✳ CivicWatch</b><p>{t("footerAbout")}</p></div><div className="footer-links"><button onClick={() => go("home")}>{t("home")}</button><button onClick={() => go("map")}>{t("map")}</button><button onClick={() => go("track")}>{t("track")}</button><button onClick={() => go("report")}>{t("reportIssue")}</button><button onClick={() => go("admin")}>{language === "hi" ? "एडमिन पोर्टल" : "Admin Portal"}</button></div></div>
         <div className="footer-copy">© 2026 CivicWatch · {language === "hi" ? "बेहतर समुदायों के लिए बनाया गया" : "Built for more informed communities"}</div>
       </footer>
     </>
