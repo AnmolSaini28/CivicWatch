@@ -24,6 +24,8 @@ import "leaflet/dist/leaflet.css";
 
 import "./styles.css";
 
+import AdminDashboard from "./AdminDashboard";
+
 const API = "http://localhost:5001/api";
 
 // The backend stores user accounts in PostgreSQL.
@@ -331,6 +333,17 @@ function App() {
     localStorage.setItem("cw_language", language);
 
   }, [language]);
+
+  useEffect(() => {
+    const checkHash = () => {
+      if (window.location.hash === "#admin") {
+        setPage("admin");
+      }
+    };
+    checkHash();
+    window.addEventListener("hashchange", checkHash);
+    return () => window.removeEventListener("hashchange", checkHash);
+  }, []);
 
   const [issues, setIssues] = useState([]);
 
@@ -958,12 +971,33 @@ function App() {
 
           )}
 
+          <button
+            onClick={() => go("admin")}
+            className={page === "admin" ? "active" : ""}
+            style={{
+              fontWeight: "700",
+              color: "#0b3d2e",
+              background: "#dcfce7",
+              border: "1px solid #bbf7d0",
+              borderRadius: "6px",
+              padding: "7px 12px",
+              cursor: "pointer",
+            }}
+            title="Municipal Admin Portal"
+          >
+            🛡️ {language === "hi" ? "एडमिन" : "Admin"}
+          </button>
+
         </div>
 
       </nav>
 
     );
 
+  }
+
+  if (page === "admin") {
+    return <AdminDashboard onLogout={() => go("home")} />;
   }
 
   return (
@@ -1749,7 +1783,17 @@ function App() {
 
       <footer>
 
-        {t("footer")}
+        {t("footer")} •{" "}
+        <a
+          href="#admin"
+          onClick={(e) => {
+            e.preventDefault();
+            go("admin");
+          }}
+          style={{ color: "inherit", textDecoration: "underline", cursor: "pointer", marginLeft: "6px" }}
+        >
+          {language === "hi" ? "एडमिन पोर्टल" : "Admin Portal"}
+        </a>
 
       </footer>
 
