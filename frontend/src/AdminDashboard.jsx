@@ -82,10 +82,54 @@ function countBy(items, field) {
 
 // Main Admin Dashboard Component.
 export default function AdminDashboard({
-  token,
-  admin,
+  token: initialToken,
+  admin: initialAdmin,
   onLogout,
 }) {
+  const [token, setToken] = useState(() => initialToken || localStorage.getItem("cw_admin_token") || "");
+  const [admin, setAdmin] = useState(() => {
+    if (initialAdmin) return initialAdmin;
+    try {
+      return JSON.parse(localStorage.getItem("cw_admin_user"));
+    } catch {
+      return null;
+    }
+  });
+
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState("");
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    if (!loginEmail || !loginPassword) return;
+    setLoginBusy(true);
+    setLoginError("");
+    try {
+      const res = await axios.post(`${API}/admin/login`, {
+        email: loginEmail.trim().toLowerCase(),
+        password: loginPassword,
+      });
+      localStorage.setItem("cw_admin_token", res.data.token);
+      localStorage.setItem("cw_admin_user", JSON.stringify(res.data.admin));
+      setToken(res.data.token);
+      setAdmin(res.data.admin);
+    } catch (err) {
+      setLoginError(err.response?.data?.error || "Login failed. Check admin credentials.");
+    } finally {
+      setLoginBusy(false);
+    }
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("cw_admin_token");
+    localStorage.removeItem("cw_admin_user");
+    setToken("");
+    setAdmin(null);
+    if (onLogout) onLogout();
+  }
+
   const [activePage, setActivePage] = useState("Overview");
 
   const [issues, setIssues] = useState([]);
@@ -439,6 +483,73 @@ export default function AdminDashboard({
       ]
     : [20.5937, 78.9629];
 
+  if (!token) {
+    return (
+      <div className="cw-admin" style={{ justifyContent: "center", alignItems: "center", background: "#0b3d2e", minHeight: "100vh", padding: "20px" }}>
+        <div style={{ background: "#ffffff", padding: "32px", borderRadius: "10px", width: "100%", maxWidth: "420px", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
+            <div className="cw-brand-icon">CW</div>
+            <div>
+              <strong style={{ fontSize: "18px" }}>CivicWatch</strong>
+              <span style={{ fontSize: "11px", color: "#64748b", display: "block" }}>ADMIN PORTAL LOGIN</span>
+            </div>
+          </div>
+          {loginError && (
+            <div className="cw-alert cw-error">{loginError}</div>
+          )}
+          <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "12px", fontWeight: "600" }}>Admin Email</label>
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="admin@civicwatch.gov.in"
+                required
+                style={{ padding: "10px", borderRadius: "6px", border: "1px solid #d8e0db" }}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "12px", fontWeight: "600" }}>Password</label>
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="••••••••••••"
+                required
+                style={{ padding: "10px", borderRadius: "6px", border: "1px solid #d8e0db" }}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loginBusy}
+              style={{ padding: "11px", background: "#0b3d2e", color: "white", border: "none", borderRadius: "6px", fontWeight: "600", cursor: "pointer", marginTop: "6px" }}
+            >
+              {loginBusy ? "Logging in..." : "Login to Admin Portal"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLoginEmail("admin@civicwatch.gov.in");
+                setLoginPassword("Admin@12345678");
+              }}
+              style={{ padding: "8px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "6px", fontSize: "12px", cursor: "pointer", color: "#475569" }}
+            >
+              Click to Fill Demo Credentials
+            </button>
+            <button
+              type="button"
+              onClick={onLogout}
+              style={{ background: "transparent", border: "none", color: "#0b3d2e", fontSize: "13px", cursor: "pointer", marginTop: "10px", textDecoration: "underline" }}
+            >
+              ← Back to Citizen Portal
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="cw-admin">
 
@@ -488,9 +599,17 @@ export default function AdminDashboard({
 
           <button
             className="cw-logout"
-            onClick={onLogout}
+            onClick={handleLogout}
           >
             ↪ Logout
+          </button>
+
+          <button
+            className="cw-logout"
+            onClick={onLogout}
+            style={{ marginTop: "6px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)" }}
+          >
+            ← Citizen Portal
           </button>
         </div>
       </aside>
