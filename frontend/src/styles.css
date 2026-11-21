@@ -593,6 +593,7 @@ footer {
   nav .links {
     align-items: center;
   }
+}
 
 /* Complaint form and interactive location picker */
 .complaint-form {
@@ -649,7 +650,6 @@ footer {
 @media (max-width: 650px) {
   .report-map { height: 350px; }
   .location-picker-heading { align-items: flex-start; }
-}
 }
 /* CivicWatch landing page refresh */
 body { background: #fff; color: #12372e; }
@@ -793,7 +793,7 @@ main:has(.landing-page) .landing-page {
 /* Desktop sizing: render the site at an effective 125% scale while
    keeping it fitted to the available browser width. */
 @media (min-width: 1100px) {
-  body {
+  body:not(:has(.cw-admin)) {
     width: 100%;
     max-width: 100%;
     zoom: 1.25;
