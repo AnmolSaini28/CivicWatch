@@ -589,4 +589,61 @@ footer {
   nav .links {
     align-items: center;
   }
+
+/* Complaint form and interactive location picker */
+.complaint-form {
+  width: 100%;
+  max-width: 850px;
+  margin: 22px auto;
+}
+
+.location-picker-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.location-picker-heading h3 {
+  margin: 8px 0 4px;
+}
+
+.location-picker-heading p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.location-picker-heading button {
+  background: #0b3d2e;
+  color: #fff;
+}
+
+.report-map {
+  height: 430px;
+  width: 100%;
+  border-radius: 12px;
+}
+
+.coordinates-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  padding: 13px 15px;
+  background: #eef7f1;
+  border: 1px solid #cfe6d7;
+  border-radius: 9px;
+  color: #174b32;
+  font-size: 14px;
+}
+
+.authmsg.success {
+  background: #e2f6e8;
+  color: #176536;
+}
+
+@media (max-width: 650px) {
+  .report-map { height: 350px; }
+  .location-picker-heading { align-items: flex-start; }
+}
 }
