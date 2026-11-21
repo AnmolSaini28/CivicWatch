@@ -589,6 +589,7 @@ footer {
   nav .links {
     align-items: center;
   }
+}
 
 /* Complaint form and interactive location picker */
 .complaint-form {
@@ -625,6 +626,18 @@ footer {
   border-radius: 12px;
 }
 
+.location-details-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 12px;
+}
+
+.location-details-grid input[readonly] {
+  background: #f5f7f9;
+  color: #344054;
+  cursor: default;
+}
+
 .coordinates-box {
   display: flex;
   flex-wrap: wrap;
@@ -645,5 +658,5 @@ footer {
 @media (max-width: 650px) {
   .report-map { height: 350px; }
   .location-picker-heading { align-items: flex-start; }
-}
+  .location-details-grid { grid-template-columns: 1fr; }
 }

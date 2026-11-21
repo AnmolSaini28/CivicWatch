@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { createRoot } from "react-dom/client";
 
@@ -203,8 +203,12 @@ const translations = {
     complaintTitlePlaceholder: "e.g. Large pothole on Main Road", description: "Description",
     descriptionPlaceholder: "Explain the issue and any useful details...", forwardAuthority: "Forward complaint to authority",
     selectAuthority: "-- Select Authority --", uploadPhoto: "Upload a photo (optional, max 5 MB)",
-    chooseLocation: "Choose Complaint Location", locationInstructions: "Click the map to place a pin, or drag the pin to adjust it.",
+    chooseLocation: "Choose Complaint Location", locationInstructions: "Click the map to place a pin, or drag the pin to adjust it. The area, city and state will be filled automatically.",
     currentLocation: "Use My Current Location", selectedLocation: "Selected complaint location", latitude: "Latitude", longitude: "Longitude",
+    location: "Location / Area", city: "City", state: "State", findingLocation: "Finding area, city and state...",
+    locationLookupFailed: "Could not identify this location. Please select another point on the map.",
+    locationDetailsRequired: "Please wait for the area, city and state to be identified before submitting.",
+    locationPlaceholder: "Area / locality will appear here", cityPlaceholder: "City will appear here", statePlaceholder: "State will appear here",
     noLocation: "No location selected yet. Select a point on the map.", submitting: "Submitting...", submit: "Submit Complaint",
     locationUnsupported: "Geolocation is not supported by this browser.", locationDenied: "Location permission was denied. You can select the location manually on the map.",
     locationFailed: "Could not get your current location. Please select it on the map.", selectLocationError: "Please select the complaint location on the map.",
@@ -285,8 +289,12 @@ const translations = {
     complaintTitlePlaceholder: "जैसे: मुख्य सड़क पर बड़ा गड्ढा", description: "विवरण",
     descriptionPlaceholder: "समस्या और उससे जुड़ी उपयोगी जानकारी बताएँ...", forwardAuthority: "शिकायत संबंधित विभाग को भेजें",
     selectAuthority: "-- विभाग चुनें --", uploadPhoto: "फोटो अपलोड करें (वैकल्पिक, अधिकतम 5 MB)",
-    chooseLocation: "शिकायत का स्थान चुनें", locationInstructions: "नक्शे पर पिन लगाने के लिए क्लिक करें या पिन को खींचकर सही स्थान पर रखें।",
+    chooseLocation: "शिकायत का स्थान चुनें", locationInstructions: "नक्शे पर पिन लगाने के लिए क्लिक करें या पिन को खींचकर सही स्थान पर रखें। क्षेत्र, शहर और राज्य अपने आप भर जाएँगे।",
     currentLocation: "मेरी वर्तमान लोकेशन का उपयोग करें", selectedLocation: "चुना गया शिकायत स्थान", latitude: "अक्षांश", longitude: "देशांतर",
+    location: "स्थान / क्षेत्र", city: "शहर", state: "राज्य", findingLocation: "क्षेत्र, शहर और राज्य खोजे जा रहे हैं...",
+    locationLookupFailed: "इस स्थान की जानकारी नहीं मिल सकी। कृपया नक्शे पर कोई दूसरा स्थान चुनें।",
+    locationDetailsRequired: "शिकायत भेजने से पहले क्षेत्र, शहर और राज्य की जानकारी आने तक प्रतीक्षा करें।",
+    locationPlaceholder: "क्षेत्र / इलाका यहाँ दिखाई देगा", cityPlaceholder: "शहर यहाँ दिखाई देगा", statePlaceholder: "राज्य यहाँ दिखाई देगा",
     noLocation: "अभी तक कोई स्थान नहीं चुना गया है। नक्शे पर एक स्थान चुनें।", submitting: "शिकायत भेजी जा रही है...", submit: "शिकायत दर्ज करें",
     locationUnsupported: "इस ब्राउज़र में लोकेशन सुविधा उपलब्ध नहीं है।", locationDenied: "लोकेशन की अनुमति नहीं मिली। आप नक्शे पर स्वयं स्थान चुन सकते हैं।",
     locationFailed: "वर्तमान लोकेशन नहीं मिल सकी। कृपया नक्शे पर स्थान चुनें।", selectLocationError: "कृपया नक्शे पर शिकायत का स्थान चुनें।",
@@ -368,6 +376,10 @@ function App() {
 
   const [tracked, setTracked] = useState(null);
 
+  const locationLookupId = useRef(0);
+
+  const [locationLookupBusy, setLocationLookupBusy] = useState(false);
+
   const [complaint, setComplaint] = useState({
 
     title: "",
@@ -375,6 +387,12 @@ function App() {
     description: "",
 
     authority: "",
+
+    location: "",
+
+    city: "",
+
+    state: "",
 
     latitude: null,
 
@@ -724,17 +742,79 @@ function App() {
 
   }
 
-  function updateComplaintLocation(location) {
+  async function updateComplaintLocation(location) {
+
+    const latitude = Number(location.lat.toFixed(7));
+
+    const longitude = Number(location.lng.toFixed(7));
+
+    const lookupId = ++locationLookupId.current;
 
     setComplaint((current) => ({
 
       ...current,
 
-      latitude: Number(location.lat.toFixed(7)),
+      latitude,
 
-      longitude: Number(location.lng.toFixed(7)),
+      longitude,
+
+      location: "",
+
+      city: "",
+
+      state: "",
 
     }));
+
+    setComplaintMessage({ type: "", text: "" });
+
+    setLocationLookupBusy(true);
+
+    try {
+
+      const response = await axios.get(`${API}/location/reverse`, {
+
+        params: { lat: latitude, lon: longitude },
+
+      });
+
+      // Ignore an older response if the user has selected a newer map point.
+
+      if (lookupId !== locationLookupId.current) return;
+
+      setComplaint((current) => ({
+
+        ...current,
+
+        location: response.data.location || "",
+
+        city: response.data.city || "",
+
+        state: response.data.state || "",
+
+      }));
+
+    } catch (error) {
+
+      if (lookupId !== locationLookupId.current) return;
+
+      setComplaintMessage({
+
+        type: "error",
+
+        text: error.response?.data?.error || t("locationLookupFailed"),
+
+      });
+
+    } finally {
+
+      if (lookupId === locationLookupId.current) {
+
+        setLocationLookupBusy(false);
+
+      }
+
+    }
 
   }
 
@@ -796,6 +876,24 @@ function App() {
 
     }
 
+    if (
+
+      locationLookupBusy ||
+
+      !complaint.location.trim() ||
+
+      !complaint.city.trim() ||
+
+      !complaint.state.trim()
+
+    ) {
+
+      setComplaintMessage({ type: "error", text: t("locationDetailsRequired") });
+
+      return;
+
+    }
+
     const formData = new FormData();
 
     formData.append("title", complaint.title.trim());
@@ -803,6 +901,12 @@ function App() {
     formData.append("description", complaint.description.trim());
 
     formData.append("authority", complaint.authority);
+
+    formData.append("location", complaint.location.trim());
+
+    formData.append("city", complaint.city.trim());
+
+    formData.append("state", complaint.state.trim());
 
     formData.append("latitude", String(complaint.latitude));
 
@@ -830,7 +934,29 @@ function App() {
 
       });
 
-      setComplaint({ title: "", description: "", authority: "", latitude: null, longitude: null });
+      locationLookupId.current += 1;
+
+      setLocationLookupBusy(false);
+
+      setComplaint({
+
+        title: "",
+
+        description: "",
+
+        authority: "",
+
+        location: "",
+
+        city: "",
+
+        state: "",
+
+        latitude: null,
+
+        longitude: null,
+
+      });
 
       setComplaintPhoto(null);
 
@@ -1095,14 +1221,28 @@ function App() {
                   )}
                 </MapContainer>
               </div>
-              {complaint.latitude !== null ? (
-                <div className="coordinates-box">
-                  <span><b>{t("latitude")}:</b> {complaint.latitude}</span>
-                  <span><b>{t("longitude")}:</b> {complaint.longitude}</span>
-                </div>
-              ) : <p className="muted">{t("noLocation")}</p>}
+              {complaint.latitude === null && <p className="muted">{t("noLocation")}</p>}
+              <div className="location-details-grid">
+                <label>
+                  {t("location")} *
+                  <input
+                    value={complaint.location}
+                    placeholder={locationLookupBusy ? t("findingLocation") : t("locationPlaceholder")}
+                    readOnly
+                  />
+                </label>
+                <label>
+                  {t("city")} *
+                  <input value={complaint.city} placeholder={t("cityPlaceholder")} readOnly />
+                </label>
+                <label>
+                  {t("state")} *
+                  <input value={complaint.state} placeholder={t("statePlaceholder")} readOnly />
+                </label>
+              </div>
+              {locationLookupBusy && <p className="muted">{t("findingLocation")}</p>}
               {complaintMessage.text && <div className={`authmsg ${complaintMessage.type}`} role="alert">{complaintMessage.text}</div>}
-              <button className="primary" type="submit" disabled={complaintBusy}>{complaintBusy ? t("submitting") : t("submit")}</button>
+              <button className="primary" type="submit" disabled={complaintBusy || locationLookupBusy}>{complaintBusy ? t("submitting") : t("submit")}</button>
             </form>
           </section>
         )}
@@ -1178,6 +1318,24 @@ function App() {
                           {issue.description || t("noDescription")}
 
                         </p>
+
+                        {(issue.location || issue.city || issue.state) && (
+
+                          <p>
+
+                            <b>{t("location")}:</b> {issue.location || "—"}
+
+                            <br />
+
+                            <b>{t("city")}:</b> {issue.city || "—"}
+
+                            <br />
+
+                            <b>{t("state")}:</b> {issue.state || "—"}
+
+                          </p>
+
+                        )}
 
                         <p>
 
@@ -1438,6 +1596,24 @@ function App() {
                     <p>
 
                       <b>{t("department")}:</b> {tracked.department}
+
+                    </p>
+
+                    <p>
+
+                      <b>{t("location")}:</b> {tracked.location || "—"}
+
+                    </p>
+
+                    <p>
+
+                      <b>{t("city")}:</b> {tracked.city || "—"}
+
+                    </p>
+
+                    <p>
+
+                      <b>{t("state")}:</b> {tracked.state || "—"}
 
                     </p>
 

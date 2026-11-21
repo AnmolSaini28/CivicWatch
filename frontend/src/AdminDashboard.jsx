@@ -314,7 +314,9 @@ export default function AdminDashboard({
         issue.tracking_id,
         issue.title,
         issue.category,
+        issue.location,
         issue.city,
+        issue.state,
         issue.department,
         issue.status,
       ].some((value) =>
@@ -367,7 +369,9 @@ export default function AdminDashboard({
       "tracking_id",
       "title",
       "category",
+      "location",
       "city",
+      "state",
       "department",
       "status",
       "created_at",
@@ -692,7 +696,9 @@ export default function AdminDashboard({
                           <br />
                           {issue.tracking_id}
                           <br />
-                          {issue.city || "City not specified"}
+                          {issue.location || "Area not specified"}
+                          <br />
+                          {[issue.city, issue.state].filter(Boolean).join(", ") || "City / state not specified"}
                           <br />
                           Status: {issue.status}
                         </Popup>
@@ -1189,7 +1195,9 @@ function ComplaintTable({
                 <td>
                   <strong>{issue.title}</strong>
                   <span className="cw-cell-sub">
-                    {issue.city || "City not specified"}
+                    {issue.location || "Area not specified"}
+                    {" · "}
+                    {[issue.city, issue.state].filter(Boolean).join(", ") || "City / state not specified"}
                     {" · "}
                     {issue.category}
                   </span>
