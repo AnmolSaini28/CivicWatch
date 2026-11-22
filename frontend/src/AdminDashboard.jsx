@@ -130,7 +130,74 @@ export default function AdminDashboard({
     if (onLogout) onLogout();
   }
 
-  const [activePage, setActivePage] = useState("Overview");
+  const getInitialTab = () => {
+    if (window.history.state && window.history.state.page === "admin" && window.history.state.tab) {
+      return window.history.state.tab;
+    }
+    const hash = window.location.hash;
+    const match = hash.match(/tab=([^&]+)/);
+    if (match) {
+      try {
+        const decoded = decodeURIComponent(match[1]);
+        const valid = ["Overview", "Live Issue Map", "Complaints", "Analytics", "Department Workload", "Notice Board"];
+        if (valid.includes(decoded)) return decoded;
+      } catch {
+        // ignore
+      }
+    }
+    return "Overview";
+  };
+
+  const [activePage, setActivePage] = useState(getInitialTab);
+
+  function switchTab(tabName, pushHistory = true) {
+    if (tabName === activePage) return;
+    setActivePage(tabName);
+    setError("");
+    setSuccess("");
+    window.scrollTo(0, 0);
+    if (pushHistory) {
+      window.history.pushState(
+        { page: "admin", tab: tabName },
+        "",
+        `#admin?tab=${encodeURIComponent(tabName)}`
+      );
+    }
+  }
+
+  useEffect(() => {
+    const currentTab = getInitialTab();
+    if (!window.history.state || window.history.state.page !== "admin" || !window.history.state.tab) {
+      window.history.replaceState(
+        { page: "admin", tab: currentTab },
+        "",
+        `#admin?tab=${encodeURIComponent(currentTab)}`
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      if (event.state && event.state.page === "admin" && event.state.tab) {
+        setActivePage(event.state.tab);
+        setError("");
+        setSuccess("");
+      } else {
+        const hash = window.location.hash;
+        const match = hash.match(/tab=([^&]+)/);
+        if (match) {
+          try {
+            const decoded = decodeURIComponent(match[1]);
+            setActivePage(decoded);
+          } catch {
+            setActivePage("Overview");
+          }
+        }
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   const [issues, setIssues] = useState([]);
   const [users, setUsers] = useState([]);
@@ -617,7 +684,7 @@ export default function AdminDashboard({
               className={
                 activePage === name ? "active" : ""
               }
-              onClick={() => setActivePage(name)}
+              onClick={() => switchTab(name)}
             >
               <span>{icon}</span>
               {name}
@@ -787,7 +854,7 @@ export default function AdminDashboard({
                   <div className="cw-panel-heading">
                     <h2>Recent Complaints</h2>
                     <button
-                      onClick={() => setActivePage("Complaints")}
+                      onClick={() => switchTab("Complaints")}
                     >
                       View all →
                     </button>
