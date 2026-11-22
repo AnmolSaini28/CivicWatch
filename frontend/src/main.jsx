@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import axios from "axios";
 import {
@@ -14,6 +14,7 @@ import "leaflet/dist/leaflet.css";
 import "./styles.css";
 
 import AdminDashboard from "./AdminDashboard";
+import UserDashboard from "./UserDashboard";
 
 const API = "http://localhost:5001/api";
 
@@ -45,6 +46,19 @@ const AUTHORITIES = [
   "Pollution Control Board",
   "Urban Development Authority",
   "Fire and Emergency Services",
+];
+
+const CATEGORIES = [
+  "Road",
+  "Garbage",
+  "Water Supply",
+  "Street Light",
+  "Drainage",
+  "Electricity",
+  "Traffic",
+  "Parks",
+  "Pollution",
+  "Other",
 ];
 
 // Clicking the map selects a complaint location.
@@ -146,7 +160,21 @@ const translations = {
     streetlight: "Streetlight", streetlightText: "Broken public lighting", drainage: "Drainage", drainageText: "Blocked drains & flooding", otherIssue: "Other", otherText: "Other public issues",
     latestReports: "Latest community reports", publicTransparency: "PUBLIC TRANSPARENCY", reportsIntro: "Real issue data, updated from your CivicWatch database.", viewDashboard: "View dashboard", trackReport: "Track report",
     pendingLabel: "Pending", inProgressLabel: "In Progress", resolvedLabel: "Resolved", voiceDifference: "YOUR VOICE MAKES A DIFFERENCE", ctaTitle: "See something that needs attention?", ctaText: "Help make your neighborhood better, one report at a time.",
-    footerAbout: "Community-powered visibility for public issues. A project prototype, not an official government portal.", submitLink: "Submit a report", reportRoadTitle: "Pothole reported near the main road", reportGarbageTitle: "Garbage collection is delayed", everyReport: "Every report matters", reportTrackImprove: "Report · Track · Improve"
+    footerAbout: "Community-powered visibility for public issues. A project prototype, not an official government portal.", submitLink: "Submit a report", reportRoadTitle: "Pothole reported near the main road", reportGarbageTitle: "Garbage collection is delayed", everyReport: "Every report matters", reportTrackImprove: "Report · Track · Improve",
+    category: "Category", selectCategory: "-- Select Category --",
+    cat_Road: "Road", cat_Garbage: "Garbage", cat_WaterSupply: "Water Supply", cat_StreetLight: "Street Light",
+    cat_Drainage: "Drainage", cat_Electricity: "Electricity", cat_Traffic: "Traffic", cat_Parks: "Parks & Gardens",
+    cat_Pollution: "Pollution", cat_Other: "Other",
+    state: "State", city: "City", block: "Area / Ward / Block", pincode: "Pincode",
+    pincodePlaceholder: "e.g. 400076", blockPlaceholder: "e.g. Powai / Ward 5", cityPlaceholder: "e.g. Mumbai", statePlaceholder: "e.g. Maharashtra",
+    anonymousReportTitle: "Report Anonymously (Identity Protected)",
+    anonymousHelpLogged: "Your name and contact details will NOT be shown to admins, government officers, or on public maps. It will only be visible in your private citizen dashboard.",
+    anonymousHelpGuest: "You are not signed in. This complaint will be submitted completely anonymously without any personal details.",
+    anonymousBadge: "Anonymous (Identity Protected)", registeredBadge: "Registered Citizen",
+    myReports: "My Reports", citizenDashboard: "Citizen Dashboard",
+    citizenDashboardSubtitle: "View and track all complaints you have submitted, including anonymous ones.",
+    noMyReports: "You have not submitted any complaints yet.", reportNewComplaint: "Report a New Problem",
+    dateSubmitted: "Submitted on", locationLabel: "Location"
   },
   hi: {
     home: "होम", map: "नक्शा", dashboard: "डैशबोर्ड", track: "ट्रैक करें",
@@ -208,7 +236,21 @@ const translations = {
     streetlight: "स्ट्रीट लाइट", streetlightText: "खराब सार्वजनिक रोशनी", drainage: "जल निकासी", drainageText: "जाम नालियाँ और जलभराव", otherIssue: "अन्य", otherText: "अन्य सार्वजनिक समस्याएँ",
     latestReports: "समुदाय की हाल की रिपोर्ट", publicTransparency: "सार्वजनिक पारदर्शिता", reportsIntro: "आपके CivicWatch डेटाबेस से अपडेट किया गया वास्तविक समस्या डेटा।", viewDashboard: "डैशबोर्ड देखें", trackReport: "रिपोर्ट ट्रैक करें",
     pendingLabel: "लंबित", inProgressLabel: "प्रगति पर", resolvedLabel: "हल हो गया", voiceDifference: "आपकी आवाज़ बदलाव ला सकती है", ctaTitle: "क्या आपने कोई ऐसी समस्या देखी है जिस पर ध्यान देना चाहिए?", ctaText: "एक-एक रिपोर्ट के ज़रिए अपने मोहल्ले को बेहतर बनाएँ।",
-    footerAbout: "समुदाय की भागीदारी से सार्वजनिक समस्याओं को सामने लाने का मंच। यह एक प्रोजेक्ट प्रोटोटाइप है, आधिकारिक सरकारी पोर्टल नहीं।", submitLink: "रिपोर्ट दर्ज करें", reportRoadTitle: "मुख्य सड़क के पास गड्ढे की रिपोर्ट", reportGarbageTitle: "कचरा संग्रह में देरी", everyReport: "हर रिपोर्ट महत्वपूर्ण है", reportTrackImprove: "रिपोर्ट करें · ट्रैक करें · सुधारें"
+    footerAbout: "समुदाय की भागीदारी से सार्वजनिक समस्याओं को सामने लाने का मंच। यह एक प्रोजेक्ट प्रोटोटाइप है, आधिकारिक सरकारी पोर्टल नहीं।", submitLink: "रिपोर्ट दर्ज करें", reportRoadTitle: "मुख्य सड़क के पास गड्ढे की रिपोर्ट", reportGarbageTitle: "कचरा संग्रह में देरी", everyReport: "हर रिपोर्ट महत्वपूर्ण है", reportTrackImprove: "रिपोर्ट करें · ट्रैक करें · सुधारें",
+    category: "श्रेणी", selectCategory: "-- श्रेणी चुनें --",
+    cat_Road: "सड़क", cat_Garbage: "कचरा", cat_WaterSupply: "जल आपूर्ति", cat_StreetLight: "स्ट्रीट लाइट",
+    cat_Drainage: "जल निकासी", cat_Electricity: "बिजली", cat_Traffic: "यातायात", cat_Parks: "पार्क और उद्यान",
+    cat_Pollution: "प्रदूषण", cat_Other: "अन्य",
+    state: "राज्य", city: "शहर", block: "क्षेत्र / वार्ड / ब्लॉक", pincode: "पिनकोड",
+    pincodePlaceholder: "उदा. 400076", blockPlaceholder: "उदा. पवई / वार्ड 5", cityPlaceholder: "उदा. मुंबई", statePlaceholder: "उदा. महाराष्ट्र",
+    anonymousReportTitle: "गुमनाम रूप से शिकायत दर्ज करें (पहचान सुरक्षित)",
+    anonymousHelpLogged: "आपका नाम या संपर्क विवरण किसी भी एडमिन, सरकारी अधिकारी या नक्शे पर नहीं दिखेगा। यह सिर्फ आपके व्यक्तिगत डैशबोर्ड पर दिखाई देगा।",
+    anonymousHelpGuest: "आप लॉग इन नहीं हैं। यह शिकायत पूरी तरह गुमनाम रूप से दर्ज की जाएगी।",
+    anonymousBadge: "गुमनाम (पहचान सुरक्षित)", registeredBadge: "पंजीकृत नागरिक",
+    myReports: "मेरी रिपोर्ट", citizenDashboard: "नागरिक डैशबोर्ड",
+    citizenDashboardSubtitle: "आपके द्वारा दर्ज की गई सभी शिकायतें यहाँ देखें, जिसमें गुमनाम रिपोर्ट भी शामिल हैं।",
+    noMyReports: "आपने अभी तक कोई शिकायत दर्ज नहीं की है।", reportNewComplaint: "नई शिकायत दर्ज करें",
+    dateSubmitted: "दर्ज करने की तारीख", locationLabel: "स्थान"
   },
 };
 
@@ -222,23 +264,328 @@ function translateStatus(status, language) {
   return labels[String(status || "").toLowerCase()] || status;
 }
 
+function statusClass(status) {
+  return String(status || "pending").toLowerCase().replace(/\s+/g, "-");
+}
+
+function LatestReportsSlider({ issues, language, t, setTrackId, go }) {
+  const viewportRef = useRef(null);
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window !== "undefined"
+      ? Math.min(window.innerWidth - 60, 1240)
+      : 1200
+  );
+  const [isPaused, setIsPaused] = useState(false);
+  const isTransitioningRef = useRef(false);
+
+  // Measure container width so cards and steps are mathematically exact
+  useEffect(() => {
+    if (!viewportRef.current) return;
+    const updateWidth = () => {
+      if (viewportRef.current) {
+        setViewportWidth(viewportRef.current.clientWidth);
+      }
+    };
+    updateWidth();
+    let ro;
+    if (typeof window.ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(updateWidth);
+      ro.observe(viewportRef.current);
+    }
+    window.addEventListener("resize", updateWidth);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", updateWidth);
+    };
+  }, []);
+
+  // Ensure at least 4 items so circular slide is smooth
+  const baseItems = useMemo(() => {
+    if (!issues || issues.length === 0) return [];
+    let list = [...issues];
+    while (list.length < 4) {
+      list = [...list, ...issues];
+    }
+    return list;
+  }, [issues]);
+
+  const N = baseItems.length;
+  const CLONES = 3;
+
+  // Cloned array for infinite circular sliding
+  const items = useMemo(() => {
+    if (N === 0) return [];
+    const startClones = baseItems.slice(-CLONES);
+    const endClones = baseItems.slice(0, CLONES);
+    return [...startClones, ...baseItems, ...endClones];
+  }, [baseItems, N]);
+
+  const [currentIndex, setCurrentIndex] = useState(CLONES);
+  const [withTransition, setWithTransition] = useState(true);
+
+  // Cards per view: exactly 3 on desktop, 2 on tablet, 1 on mobile
+  const cardsPerView = viewportWidth <= 540 ? 1 : viewportWidth <= 860 ? 2 : 3;
+  const gap = viewportWidth <= 540 ? 12 : 16;
+  const cardWidth =
+    viewportWidth > 0
+      ? (viewportWidth - (cardsPerView - 1) * gap) / cardsPerView
+      : 360;
+  const stepWidth = cardWidth + gap;
+
+  const slideNext = useCallback(() => {
+    if (isTransitioningRef.current || N <= 1) return;
+    isTransitioningRef.current = true;
+    setWithTransition(true);
+    setCurrentIndex((prev) => prev + 1);
+    setTimeout(() => {
+      isTransitioningRef.current = false;
+    }, 600);
+  }, [N]);
+
+  const slidePrev = useCallback(() => {
+    if (isTransitioningRef.current || N <= 1) return;
+    isTransitioningRef.current = true;
+    setWithTransition(true);
+    setCurrentIndex((prev) => prev - 1);
+    setTimeout(() => {
+      isTransitioningRef.current = false;
+    }, 600);
+  }, [N]);
+
+  // Seamless circular reset when reaching clone boundaries
+  const handleTransitionEnd = () => {
+    isTransitioningRef.current = false;
+    if (currentIndex >= N + CLONES) {
+      setWithTransition(false);
+      setCurrentIndex(currentIndex - N);
+    } else if (currentIndex < CLONES) {
+      setWithTransition(false);
+      setCurrentIndex(currentIndex + N);
+    }
+  };
+
+  // Re-enable transition on next frame after non-animated jump
+  useEffect(() => {
+    if (!withTransition) {
+      const raf1 = requestAnimationFrame(() => {
+        const raf2 = requestAnimationFrame(() => {
+          setWithTransition(true);
+        });
+        return () => cancelAnimationFrame(raf2);
+      });
+      return () => cancelAnimationFrame(raf1);
+    }
+  }, [withTransition]);
+
+  // Auto-slide timer: slides every 3 seconds in circular fashion
+  useEffect(() => {
+    if (isPaused || N <= 1) return;
+    const timer = setInterval(() => {
+      slideNext();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [isPaused, N, slideNext]);
+
+  // Touch gesture support
+  const touchStartX = useRef(0);
+  const touchDeltaX = useRef(0);
+
+  const handleTouchStart = (e) => {
+    setIsPaused(true);
+    touchStartX.current = e.touches[0].clientX;
+    touchDeltaX.current = 0;
+  };
+
+  const handleTouchMove = (e) => {
+    touchDeltaX.current = e.touches[0].clientX - touchStartX.current;
+  };
+
+  const handleTouchEnd = () => {
+    if (touchDeltaX.current < -40) {
+      slideNext();
+    } else if (touchDeltaX.current > 40) {
+      slidePrev();
+    }
+    setIsPaused(false);
+  };
+
+  if (!issues || issues.length === 0) {
+    return <p className="no-reports-note">{t("noRecentReports")}</p>;
+  }
+
+  const rawCount = issues.length || 1;
+  const activeDotIndex =
+    (((currentIndex - CLONES) % rawCount) + rawCount) % rawCount;
+
+  return (
+    <>
+      <div className="issues-heading">
+        <div>
+          <span className="section-kicker">{t("publicTransparency")}</span>
+          <h2>{t("latestReports")}</h2>
+          <p>{t("reportsIntro")}</p>
+        </div>
+        <div className="latest-header-actions">
+          <button className="text-link" onClick={() => go("map")}>
+            {t("exploreMap")} →
+          </button>
+          {baseItems.length > 0 && (
+            <div className="slider-nav-btns">
+              <button
+                type="button"
+                className="slider-arrow-btn"
+                onClick={slidePrev}
+                aria-label="Previous report"
+                title="Previous"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                className="slider-arrow-btn"
+                onClick={slideNext}
+                aria-label="Next report"
+                title="Next"
+              >
+                ›
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div
+        className="latest-carousel-wrapper"
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="latest-carousel-viewport" ref={viewportRef}>
+          <div
+            className="latest-carousel-track"
+            onTransitionEnd={handleTransitionEnd}
+            style={{
+              transform: `translateX(-${currentIndex * stepWidth}px)`,
+              transition: withTransition
+                ? "transform 0.55s cubic-bezier(0.25, 1, 0.5, 1)"
+                : "none",
+              gap: `${gap}px`,
+            }}
+          >
+            {items.map((issue, idx) => (
+              <article
+                className="latest-card"
+                key={`${issue.id || "rep"}-${idx}`}
+                style={{
+                  width: `${cardWidth}px`,
+                  flex: `0 0 ${cardWidth}px`,
+                  maxWidth: `${cardWidth}px`,
+                }}
+              >
+                <div className="latest-meta">
+                  <span>{issue.category || t("civicIssue")}</span>
+                  <em className={"status " + statusClass(issue.status)}>
+                    {translateStatus(issue.status, language)}
+                  </em>
+                </div>
+                <h3>{issue.title || issue.description || t("civicIssue")}</h3>
+                <div className="latest-bottom">
+                  <small>{issue.tracking_id}</small>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTrackId(issue.tracking_id || "");
+                      go("track");
+                    }}
+                  >
+                    {t("trackReport")} →
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        {rawCount > 1 && (
+          <div className="latest-carousel-dots">
+            {issues.slice(0, Math.min(rawCount, 6)).map((_, i) => (
+              <span
+                key={i}
+                className={
+                  "latest-dot " + (activeDotIndex === i ? "active" : "")
+                }
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 function App() {
-  const [page, setPage] = useState("home");
+  const getInitialPage = () => {
+    const hash = window.location.hash.replace(/^#/, "");
+    const [pagePart] = hash.split("?");
+    const valid = ["home", "report", "map", "track", "login", "signup", "user-dashboard", "admin"];
+    return valid.includes(pagePart) ? pagePart : "home";
+  };
+
+  const [page, setPage] = useState(getInitialPage);
   const [language, setLanguage] = useState(() => localStorage.getItem("cw_language") === "hi" ? "hi" : "en");
   const t = (key) => translations[language]?.[key] ?? translations.en[key] ?? key;
   useEffect(() => {
     localStorage.setItem("cw_language", language);
   }, [language]);
 
+  // Set up browser history stack & back navigation support
   useEffect(() => {
-    const checkHash = () => {
-      if (window.location.hash === "#admin") {
-        setPage("admin");
+    const initialPage = getInitialPage();
+    // Safety check: ensure history has a root anchor so back from home doesn't close website
+    if (!window.history.state) {
+      window.history.replaceState({ page: "root-anchor" }, "", window.location.hash || "#home");
+      window.history.pushState({ page: initialPage }, "", window.location.hash || `#${initialPage}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      setAuthMsg({ type: "", text: "" });
+      if (event.state) {
+        if (event.state.page === "root-anchor") {
+          // Trap root-anchor so browser back doesn't close website
+          setPage("home");
+          window.history.pushState({ page: "home" }, "", "#home");
+          return;
+        }
+        if (event.state.page) {
+          setPage(event.state.page);
+          return;
+        }
+      }
+      const hash = window.location.hash.replace(/^#/, "");
+      const [pagePart] = hash.split("?");
+      const valid = ["home", "report", "map", "track", "login", "signup", "user-dashboard", "admin"];
+      setPage(valid.includes(pagePart) ? pagePart : "home");
+    };
+
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace(/^#/, "");
+      const [pagePart] = hash.split("?");
+      const valid = ["home", "report", "map", "track", "login", "signup", "user-dashboard", "admin"];
+      if (valid.includes(pagePart)) {
+        setPage(pagePart);
       }
     };
-    checkHash();
-    window.addEventListener("hashchange", checkHash);
-    return () => window.removeEventListener("hashchange", checkHash);
+
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("hashchange", handleHashChange);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("hashchange", handleHashChange);
+    };
   }, []);
   const [issues, setIssues] = useState([]);
   const [dash, setDash] = useState(null);
@@ -260,10 +607,17 @@ function App() {
   });
   const [trackId, setTrackId] = useState("");
   const [tracked, setTracked] = useState(null);
+  const [userReports, setUserReports] = useState([]);
   const [complaint, setComplaint] = useState({
     title: "",
+    category: "Road",
     description: "",
     authority: "",
+    state: "Maharashtra",
+    city: "Mumbai",
+    block: "Powai",
+    pincode: "",
+    isAnonymous: false,
     latitude: null,
     longitude: null,
   });
@@ -280,10 +634,38 @@ function App() {
       .get(API + "/dashboard")
       .then((response) => setDash(response.data))
       .catch(() => setDash(null));
+
+  const loadUserReports = useCallback(async () => {
+    if (!user?.id) {
+      setUserReports([]);
+      return;
+    }
+    try {
+      const response = await axios.get(`${API}/user/issues/${user.id}`);
+      setUserReports(response.data);
+    } catch {
+      setUserReports([]);
+    }
+  }, [user]);
+
   useEffect(() => {
     loadIssues();
     loadDash();
   }, []);
+
+  useEffect(() => {
+    if (user?.id) {
+      loadUserReports();
+    } else {
+      setUserReports([]);
+    }
+  }, [user, loadUserReports]);
+
+  useEffect(() => {
+    if (user && (page === "login" || page === "signup")) {
+      go("user-dashboard");
+    }
+  }, [user, page]);
 
   // Keep only issues with valid geographic coordinates.
 
@@ -337,10 +719,15 @@ function App() {
 
   // Authentication requests are sent to the Node/Express backend.
 
-  function go(nextPage) {
+  function go(nextPage, pushHistory = true) {
     setAuthMsg({ type: "", text: "" });
     setPage(nextPage);
     window.scrollTo(0, 0);
+    if (pushHistory) {
+      if (!window.history.state || window.history.state.page !== nextPage) {
+        window.history.pushState({ page: nextPage }, "", `#${nextPage}`);
+      }
+    }
   }
   async function signup(event) {
     event.preventDefault();
@@ -396,7 +783,7 @@ function App() {
       const account = response.data.user;
       localStorage.setItem(SESSION_KEY, JSON.stringify(account));
       setUser(account);
-      go("home");
+      go("user-dashboard");
     } catch (error) {
       setAuthMsg({
         type: "error",
@@ -427,7 +814,7 @@ function App() {
       const account = response.data.user;
       localStorage.setItem(SESSION_KEY, JSON.stringify(account));
       setUser(account);
-      go("home");
+      go("user-dashboard");
     } catch (error) {
       setAuthMsg({
         type: "error",
@@ -487,8 +874,14 @@ function App() {
     }
     const formData = new FormData();
     formData.append("title", complaint.title.trim());
+    formData.append("category", complaint.category || "Other");
     formData.append("description", complaint.description.trim());
     formData.append("authority", complaint.authority);
+    formData.append("state", (complaint.state || "Maharashtra").trim());
+    formData.append("city", (complaint.city || "Mumbai").trim());
+    formData.append("block", (complaint.block || "Powai").trim());
+    formData.append("pincode", (complaint.pincode || "").trim());
+    formData.append("isAnonymous", String(Boolean(complaint.isAnonymous || !user)));
     formData.append("latitude", String(complaint.latitude));
     formData.append("longitude", String(complaint.longitude));
     if (user?.id) formData.append("userId", String(user.id));
@@ -502,11 +895,23 @@ function App() {
         type: "success",
         text: `${t("submitSuccess")} ${created.tracking_id}`,
       });
-      setComplaint({ title: "", description: "", authority: "", latitude: null, longitude: null });
+      setComplaint({
+        title: "",
+        category: "Road",
+        description: "",
+        authority: "",
+        state: "Maharashtra",
+        city: "Mumbai",
+        block: "Powai",
+        pincode: "",
+        isAnonymous: false,
+        latitude: null,
+        longitude: null,
+      });
       setComplaintPhoto(null);
       const photoInput = formElement.querySelector('input[type="file"]');
       if (photoInput) photoInput.value = "";
-      await Promise.all([loadIssues(), loadDash()]);
+      await Promise.all([loadIssues(), loadDash(), loadUserReports()]);
     } catch (error) {
       setComplaintMessage({
         type: "error",
@@ -523,7 +928,7 @@ function App() {
       <nav>
         <div className="brand">🇮🇳 CivicWatch</div>
         <div className="links">
-          {["home", "report", "map", "dashboard", "track"].map((item) => (
+          {["home", "report", "map", "track"].map((item) => (
             <button
               key={item}
               onClick={() => go(item)}
@@ -548,23 +953,23 @@ function App() {
         <div className="auth">
           {user ? (
             <>
-              <span className="hello">
+              <span
+                className="hello"
+                onClick={() => go("user-dashboard")}
+                style={{ cursor: "pointer" }}
+                title="View Citizen Dashboard"
+              >
                 {t("hello")} {user.name.split(" ")[0]}
               </span>
               <button onClick={logout}>{t("logout")}</button>
             </>
           ) : (
-            <>
-              <button
-                onClick={() => go("login")}
-                className={page === "login" ? "active" : ""}
-              >
-                {t("login")}
-              </button>
-              <button className="primary" onClick={() => go("signup")}>
-                {t("signup")}
-              </button>
-            </>
+            <button
+              onClick={() => go("login")}
+              className={`primary ${page === "login" ? "active" : ""}`}
+            >
+              {t("login")}
+            </button>
           )}
 
           <button
@@ -590,6 +995,32 @@ function App() {
 
   if (page === "admin") {
     return <AdminDashboard onLogout={() => go("home")} />;
+  }
+
+  if (page === "user-dashboard") {
+    const activeUser =
+      user ||
+      (() => {
+        try {
+          const saved = JSON.parse(localStorage.getItem(SESSION_KEY));
+          return saved?.id && saved?.name ? saved : null;
+        } catch {
+          return null;
+        }
+      })();
+
+    if (!activeUser) {
+      setTimeout(() => go("login"), 0);
+      return null;
+    }
+    return (
+      <UserDashboard
+        user={activeUser}
+        onLogout={logout}
+        onNavigate={(target) => go(target)}
+        onUserUpdate={(updatedUser) => setUser(updatedUser)}
+      />
+    );
   }
   return (
     <>
@@ -639,9 +1070,17 @@ function App() {
                 {[ ["🚧","road","roadText"], ["🗑️","garbage","garbageText"], ["💧","water","waterText"], ["💡","streetlight","streetlightText"], ["🌧️","drainage","drainageText"], ["📍","otherIssue","otherText"] ].map(([icon,title,desc]) => <button className="issue-category" key={title} onClick={() => go("report")}><span>{icon}</span><b>{t(title)}</b><small>{t(desc)}</small><i>↗</i></button>)}
               </div>
             </section>
-            <section className="latest-section"><div className="landing-width"><div className="issues-heading"><div><span className="section-kicker">{t("publicTransparency")}</span><h2>{t("latestReports")}</h2><p>{t("reportsIntro")}</p></div><button className="text-link" onClick={() => go("dashboard")}>{t("viewDashboard")} →</button></div>
-              <div className="latest-grid">{issues.length ? issues.slice(0, 2).map(issue => <article className="latest-card" key={issue.id}><div className="latest-meta"><span>{issue.category || t("civicIssue")}</span><em className={"status " + statusClass(issue.status)}>{translateStatus(issue.status, language)}</em></div><h3>{issue.title || issue.description || t("civicIssue")}</h3><div className="latest-bottom"><small>{issue.tracking_id}</small><button onClick={() => { setTrackId(issue.tracking_id || ""); go("track"); }}>{t("trackReport")} →</button></div></article>) : <p className="no-reports-note">{t("noRecentReports")}</p>}</div>
-            </div></section>
+            <section className="latest-section">
+              <div className="landing-width">
+                <LatestReportsSlider
+                  issues={issues}
+                  language={language}
+                  t={t}
+                  setTrackId={setTrackId}
+                  go={go}
+                />
+              </div>
+            </section>
             <section className="landing-cta"><div className="landing-width cta-inner"><div><span className="section-kicker">{t("voiceDifference")}</span><h2>{t("ctaTitle")}</h2><p>{t("ctaText")}</p></div><button className="gold-button" onClick={() => go("report")}>{t("reportIssue")} ↗</button></div></section>
           </div>
         )}
@@ -654,25 +1093,110 @@ function App() {
               {user ? ` ${t("signedInAs")} ${user.name}.` : ` ${t("anonymousSubmit")}`}
             </p>
             <form className="form complaint-form" onSubmit={submitComplaint}>
-              <label>
-                {t("complaintTitle")} *
-                <input value={complaint.title} onChange={(event) => setComplaint({ ...complaint, title: event.target.value })} maxLength={200} placeholder={t("complaintTitlePlaceholder")} required />
-              </label>
+              <div className="grid2">
+                <label>
+                  {t("complaintTitle")} *
+                  <input
+                    value={complaint.title}
+                    onChange={(event) => setComplaint({ ...complaint, title: event.target.value })}
+                    maxLength={200}
+                    placeholder={t("complaintTitlePlaceholder")}
+                    required
+                  />
+                </label>
+                <label>
+                  {t("category")} *
+                  <select
+                    value={complaint.category}
+                    onChange={(event) => setComplaint({ ...complaint, category: event.target.value })}
+                    required
+                  >
+                    {CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {t(`cat_${cat.replace(/\s+/g, "")}`) || cat}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid2">
+                <label>
+                  {t("forwardAuthority")} *
+                  <select
+                    value={complaint.authority}
+                    onChange={(event) => setComplaint({ ...complaint, authority: event.target.value })}
+                    required
+                  >
+                    <option value="">{t("selectAuthority")}</option>
+                    {AUTHORITIES.map((authority, index) => (
+                      <option key={authority} value={authority}>
+                        {t(`authority${index}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  {t("uploadPhoto")}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={(event) => setComplaintPhoto(event.target.files?.[0] || null)}
+                  />
+                </label>
+              </div>
+
               <label>
                 {t("description")} *
-                <textarea value={complaint.description} onChange={(event) => setComplaint({ ...complaint, description: event.target.value })} placeholder={t("descriptionPlaceholder")} required />
+                <textarea
+                  value={complaint.description}
+                  onChange={(event) => setComplaint({ ...complaint, description: event.target.value })}
+                  placeholder={t("descriptionPlaceholder")}
+                  required
+                />
               </label>
-              <label>
-                {t("forwardAuthority")} *
-                <select value={complaint.authority} onChange={(event) => setComplaint({ ...complaint, authority: event.target.value })} required>
-                  <option value="">{t("selectAuthority")}</option>
-                  {AUTHORITIES.map((authority, index) => <option key={authority} value={authority}>{t(`authority${index}`)}</option>)}
-                </select>
-              </label>
-              <label>
-                {t("uploadPhoto")}
-                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => setComplaintPhoto(event.target.files?.[0] || null)} />
-              </label>
+
+              <div className="grid2">
+                <label>
+                  {t("state")} *
+                  <input
+                    value={complaint.state}
+                    onChange={(event) => setComplaint({ ...complaint, state: event.target.value })}
+                    placeholder={t("statePlaceholder")}
+                    required
+                  />
+                </label>
+                <label>
+                  {t("city")} *
+                  <input
+                    value={complaint.city}
+                    onChange={(event) => setComplaint({ ...complaint, city: event.target.value })}
+                    placeholder={t("cityPlaceholder")}
+                    required
+                  />
+                </label>
+              </div>
+
+              <div className="grid2">
+                <label>
+                  {t("block")} *
+                  <input
+                    value={complaint.block}
+                    onChange={(event) => setComplaint({ ...complaint, block: event.target.value })}
+                    placeholder={t("blockPlaceholder")}
+                    required
+                  />
+                </label>
+                <label>
+                  {t("pincode")}
+                  <input
+                    value={complaint.pincode}
+                    onChange={(event) => setComplaint({ ...complaint, pincode: event.target.value })}
+                    placeholder={t("pincodePlaceholder")}
+                    maxLength={6}
+                  />
+                </label>
+              </div>
               <div className="location-picker-heading">
                 <div>
                   <h3>{t("chooseLocation")} *</h3>
@@ -698,6 +1222,28 @@ function App() {
                   <span><b>{t("longitude")}:</b> {complaint.longitude}</span>
                 </div>
               ) : <p className="muted">{t("noLocation")}</p>}
+
+              {/* Anonymous Reporting Option */}
+              <div className="anonymous-toggle-card">
+                <label style={{ display: "flex", flexDirection: "row", alignItems: "flex-start", gap: "12px", cursor: user ? "pointer" : "default", margin: 0, fontWeight: "normal" }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(complaint.isAnonymous || !user)}
+                    disabled={!user}
+                    onChange={(e) => setComplaint({ ...complaint, isAnonymous: e.target.checked })}
+                    style={{ width: "20px", height: "20px", marginTop: "2px", accentColor: "#0b6848", cursor: user ? "pointer" : "default" }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: "700", fontSize: "15px", color: "#0b3d2e", display: "flex", alignItems: "center", gap: "6px" }}>
+                      🛡️ {t("anonymousReportTitle")}
+                    </div>
+                    <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#4b5563", lineHeight: "1.4" }}>
+                      {user ? t("anonymousHelpLogged") : t("anonymousHelpGuest")}
+                    </p>
+                  </div>
+                </label>
+              </div>
+
               {complaintMessage.text && <div className={`authmsg ${complaintMessage.type}`} role="alert">{complaintMessage.text}</div>}
               <button className="primary" type="submit" disabled={complaintBusy}>{complaintBusy ? t("submitting") : t("submit")}</button>
             </form>
@@ -785,59 +1331,6 @@ function App() {
               >
                 {t("refreshMap")}
               </button>
-            </div>
-          </section>
-        )}
-        {/* DASHBOARD */}
-        {page === "dashboard" && (
-          <section>
-            <h2>{t("governmentDashboard")}</h2>
-            <div className="cards dashboard">
-              <div>
-                <b>{dash?.total ?? 0}</b>
-                <span>{t("total")}</span>
-              </div>
-              <div>
-                <b>{dash?.pending ?? 0}</b>
-                <span>{t("pending")}</span>
-              </div>
-              <div>
-                <b>{dash?.inProgress ?? 0}</b>
-                <span>{t("inProgress")}</span>
-              </div>
-              <div>
-                <b>{dash?.resolved ?? 0}</b>
-                <span>{t("resolved")}</span>
-              </div>
-            </div>
-            <h3>{t("mostReported")}</h3>
-            <div className="list">
-              {dash?.categories?.length ? (
-                dash.categories.map((category) => (
-                  <div key={category.category}>
-                    <span>{category.category}</span>
-                    <b>{category.count}</b>
-                  </div>
-                ))
-              ) : (
-                <p>{t("noData")}</p>
-              )}
-            </div>
-            <h3>{t("recentReports")}</h3>
-            <div className="table">
-              {dash?.recent?.length ? (
-                dash.recent.map((issue) => (
-                  <div key={issue.id} className="row">
-                    <span>{issue.tracking_id}</span>
-                    <span>{issue.category}</span>
-                    <span className={"status " + statusClass(issue.status)}>
-                      {translateStatus(issue.status, language)}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p className="empty">{t("noRecentReports")}</p>
-              )}
             </div>
           </section>
         )}
