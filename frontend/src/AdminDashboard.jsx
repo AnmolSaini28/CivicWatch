@@ -1261,7 +1261,7 @@ export default function AdminDashboard({
               {selectedIssue.photo_url ? (
                 <div style={{ width: "100%", maxHeight: "280px", borderRadius: "8px", overflow: "hidden", marginBottom: "16px", background: "#0f172a", textAlign: "center" }}>
                   <img
-                    src={`http://localhost:5001${selectedIssue.photo_url}`}
+                    src={selectedIssue.photo_url.startsWith("http") ? selectedIssue.photo_url : `http://localhost:5001${selectedIssue.photo_url.startsWith("/") ? "" : "/"}${selectedIssue.photo_url}`}
                     alt="Proof"
                     style={{ maxHeight: "280px", maxWidth: "100%", objectFit: "contain" }}
                   />
@@ -1540,7 +1540,7 @@ function ComplaintTable({
                 <td>
                   {issue.photo_url ? (
                     <img
-                      src={`http://localhost:5001${issue.photo_url}`}
+                      src={issue.photo_url.startsWith("http") ? issue.photo_url : `http://localhost:5001${issue.photo_url.startsWith("/") ? "" : "/"}${issue.photo_url}`}
                       alt="Proof"
                       style={{ width: "36px", height: "36px", objectFit: "cover", borderRadius: "5px", cursor: "pointer", border: "1px solid #d8e0db" }}
                       onClick={() => onSelectIssue && onSelectIssue(issue)}

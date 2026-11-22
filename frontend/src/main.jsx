@@ -662,7 +662,7 @@ function App() {
       <nav>
         <div className="brand">🇮🇳 CivicWatch</div>
         <div className="links">
-          {["home", "report", "map", "dashboard", "track"].map((item) => (
+          {["home", "report", "map", "track"].map((item) => (
             <button
               key={item}
               onClick={() => go(item)}
@@ -778,7 +778,7 @@ function App() {
                 {[ ["🚧","road","roadText"], ["🗑️","garbage","garbageText"], ["💧","water","waterText"], ["💡","streetlight","streetlightText"], ["🌧️","drainage","drainageText"], ["📍","otherIssue","otherText"] ].map(([icon,title,desc]) => <button className="issue-category" key={title} onClick={() => go("report")}><span>{icon}</span><b>{t(title)}</b><small>{t(desc)}</small><i>↗</i></button>)}
               </div>
             </section>
-            <section className="latest-section"><div className="landing-width"><div className="issues-heading"><div><span className="section-kicker">{t("publicTransparency")}</span><h2>{t("latestReports")}</h2><p>{t("reportsIntro")}</p></div><button className="text-link" onClick={() => go("dashboard")}>{t("viewDashboard")} →</button></div>
+            <section className="latest-section"><div className="landing-width"><div className="issues-heading"><div><span className="section-kicker">{t("publicTransparency")}</span><h2>{t("latestReports")}</h2><p>{t("reportsIntro")}</p></div><button className="text-link" onClick={() => go("map")}>{t("exploreMap")} →</button></div>
               <div className="latest-grid">{issues.length ? issues.slice(0, 2).map(issue => <article className="latest-card" key={issue.id}><div className="latest-meta"><span>{issue.category || t("civicIssue")}</span><em className={"status " + statusClass(issue.status)}>{translateStatus(issue.status, language)}</em></div><h3>{issue.title || issue.description || t("civicIssue")}</h3><div className="latest-bottom"><small>{issue.tracking_id}</small><button onClick={() => { setTrackId(issue.tracking_id || ""); go("track"); }}>{t("trackReport")} →</button></div></article>) : <p className="no-reports-note">{t("noRecentReports")}</p>}</div>
             </div></section>
             <section className="landing-cta"><div className="landing-width cta-inner"><div><span className="section-kicker">{t("voiceDifference")}</span><h2>{t("ctaTitle")}</h2><p>{t("ctaText")}</p></div><button className="gold-button" onClick={() => go("report")}>{t("reportIssue")} ↗</button></div></section>
@@ -957,59 +957,6 @@ function App() {
               >
                 {t("refreshMap")}
               </button>
-            </div>
-          </section>
-        )}
-        {/* DASHBOARD */}
-        {page === "dashboard" && (
-          <section>
-            <h2>{t("governmentDashboard")}</h2>
-            <div className="cards dashboard">
-              <div>
-                <b>{dash?.total ?? 0}</b>
-                <span>{t("total")}</span>
-              </div>
-              <div>
-                <b>{dash?.pending ?? 0}</b>
-                <span>{t("pending")}</span>
-              </div>
-              <div>
-                <b>{dash?.inProgress ?? 0}</b>
-                <span>{t("inProgress")}</span>
-              </div>
-              <div>
-                <b>{dash?.resolved ?? 0}</b>
-                <span>{t("resolved")}</span>
-              </div>
-            </div>
-            <h3>{t("mostReported")}</h3>
-            <div className="list">
-              {dash?.categories?.length ? (
-                dash.categories.map((category) => (
-                  <div key={category.category}>
-                    <span>{category.category}</span>
-                    <b>{category.count}</b>
-                  </div>
-                ))
-              ) : (
-                <p>{t("noData")}</p>
-              )}
-            </div>
-            <h3>{t("recentReports")}</h3>
-            <div className="table">
-              {dash?.recent?.length ? (
-                dash.recent.map((issue) => (
-                  <div key={issue.id} className="row">
-                    <span>{issue.tracking_id}</span>
-                    <span>{issue.category}</span>
-                    <span className={"status " + statusClass(issue.status)}>
-                      {translateStatus(issue.status, language)}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p className="empty">{t("noRecentReports")}</p>
-              )}
             </div>
           </section>
         )}
