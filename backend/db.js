@@ -4,8 +4,13 @@ const { Pool } = require("pg");
 
 // Pool manages PostgreSQL connections for us.
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString:
+    process.env.DATABASE_URL ||
+    "postgresql://postgres:postgres@localhost:5432/civicwatch",
+});
+
+pool.on("error", (err) => {
+  console.error("Unexpected error on idle PostgreSQL client:", err.message || err);
 });
 
 module.exports = pool;
-
