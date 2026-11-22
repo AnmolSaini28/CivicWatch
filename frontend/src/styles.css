@@ -1,6 +1,10 @@
-
 * {
   box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  min-width: 0;
 }
 
 body {
@@ -91,7 +95,7 @@ nav .auth .primary {
 
 /* Main layout */
 main {
-  max-width: 1100px;
+  max-width: 1240px;
   margin: auto;
   padding: 45px 20px;
   min-height: 82vh;

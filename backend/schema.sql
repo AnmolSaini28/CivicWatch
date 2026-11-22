@@ -20,6 +20,12 @@ CREATE TABLE IF NOT EXISTS admins (
     name VARCHAR(100) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
+    admin_level VARCHAR(30) NOT NULL DEFAULT 'CITY'
+      CHECK (admin_level IN ('NATIONAL', 'STATE', 'DISTRICT', 'CITY', 'BLOCK')),
+    state VARCHAR(100),
+    district VARCHAR(100),
+    city VARCHAR(100),
+    block VARCHAR(100),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
