@@ -264,6 +264,10 @@ app.get("/api/issues", async (_req, res) => {
         pincode,
         latitude,
         longitude,
+        upvotes_count,
+        downvotes_count,
+        is_duplicate,
+        duplicate_of_id,
         created_at
       FROM issues
       ORDER BY created_at DESC
@@ -348,6 +352,7 @@ app.get(
       const result = await pool.query(
         `
         SELECT
+          id,
           tracking_id,
           title,
           category,
@@ -362,6 +367,10 @@ app.get(
           pincode,
           latitude,
           longitude,
+          upvotes_count,
+          downvotes_count,
+          is_duplicate,
+          duplicate_of_id,
           created_at,
           resolved_at
         FROM issues
@@ -525,6 +534,35 @@ app.post(
         ? `/uploads/${req.file.filename}`
         : null;
 
+      // Part 2: Proximity duplicate detection (< 100 meters = 0.10 km in same category)
+      let isDuplicate = false;
+      let duplicateOfId = null;
+      let duplicateNotice = null;
+
+      const nearbyCheck = await pool.query(
+        `SELECT id, tracking_id, title, category, latitude, longitude 
+         FROM issues 
+         WHERE category = $1 AND status != 'Resolved' AND latitude IS NOT NULL AND longitude IS NOT NULL
+         ORDER BY created_at DESC 
+         LIMIT 30`,
+        [category]
+      );
+
+      for (const row of nearbyCheck.rows) {
+        const dist = getDistanceKm(lat, lng, Number(row.latitude), Number(row.longitude));
+        if (dist <= 0.10) { // Within 100 meters
+          isDuplicate = true;
+          duplicateOfId = row.id;
+          duplicateNotice = `Identified existing ${category} report (${row.tracking_id}) within ${(dist * 1000).toFixed(0)}m. Added support verification to original issue.`;
+          // Automatically add upvote to original issue to record community agreement
+          await pool.query(
+            "UPDATE issues SET upvotes_count = upvotes_count + 1 WHERE id = $1",
+            [row.id]
+          );
+          break;
+        }
+      }
+
       // Insert complaint into PostgreSQL with all synchronized fields
       const result = await pool.query(
         `
@@ -544,9 +582,11 @@ app.post(
           state,
           district,
           block,
-          pincode
+          pincode,
+          is_duplicate,
+          duplicate_of_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         RETURNING
           id,
           tracking_id,
@@ -565,6 +605,10 @@ app.post(
           pincode,
           latitude,
           longitude,
+          upvotes_count,
+          downvotes_count,
+          is_duplicate,
+          duplicate_of_id,
           created_at
         `,
         [
@@ -583,10 +627,15 @@ app.post(
           district,
           block,
           pincode,
+          isDuplicate,
+          duplicateOfId,
         ]
       );
 
-      const createdIssue = result.rows[0];
+      const createdIssue = {
+        ...result.rows[0],
+        duplicateNotice,
+      };
 
       // Part 1: Broadcast alert to registered citizens within 10km radius
       sendNearbyAlerts(createdIssue).catch((broadcastErr) => {
@@ -935,6 +984,10 @@ app.get("/api/user/issues/:userId", async (req, res) => {
         pincode,
         latitude,
         longitude,
+        upvotes_count,
+        downvotes_count,
+        is_duplicate,
+        duplicate_of_id,
         is_anonymous,
         created_at,
         resolved_at
@@ -1013,6 +1066,124 @@ app.put("/api/user/profile/:userId", async (req, res) => {
 });
 
 // ==========================================
+// PART 2: COMMUNITY VERIFICATION VOTING
+// ==========================================
+
+// Cast or toggle vote on an issue (1 Citizen = 1 Vote)
+app.post("/api/issues/:id/vote", async (req, res) => {
+  const issueId = parseInt(req.params.id, 10);
+  const { userId, voteType } = req.body;
+
+  if (!Number.isInteger(issueId) || !Number.isInteger(Number(userId))) {
+    return res.status(400).json({ error: "Valid issue ID and user ID are required" });
+  }
+  if (!["upvote", "downvote"].includes(voteType)) {
+    return res.status(400).json({ error: "Vote type must be 'upvote' or 'downvote'" });
+  }
+
+  const uId = Number(userId);
+
+  try {
+    // Check if user already cast a vote on this issue
+    const existing = await pool.query(
+      "SELECT id, vote_type FROM issue_votes WHERE issue_id = $1 AND user_id = $2",
+      [issueId, uId]
+    );
+
+    let activeVote = null;
+
+    if (existing.rows.length === 0) {
+      // 1. New vote cast
+      await pool.query(
+        "INSERT INTO issue_votes (issue_id, user_id, vote_type) VALUES ($1, $2, $3)",
+        [issueId, uId, voteType]
+      );
+      if (voteType === "upvote") {
+        await pool.query("UPDATE issues SET upvotes_count = upvotes_count + 1 WHERE id = $1", [issueId]);
+      } else {
+        await pool.query("UPDATE issues SET downvotes_count = downvotes_count + 1 WHERE id = $1", [issueId]);
+      }
+      activeVote = voteType;
+    } else if (existing.rows[0].vote_type === voteType) {
+      // 2. Same vote clicked again -> remove/retract vote (toggle off)
+      await pool.query("DELETE FROM issue_votes WHERE id = $1", [existing.rows[0].id]);
+      if (voteType === "upvote") {
+        await pool.query("UPDATE issues SET upvotes_count = GREATEST(0, upvotes_count - 1) WHERE id = $1", [issueId]);
+      } else {
+        await pool.query("UPDATE issues SET downvotes_count = GREATEST(0, downvotes_count - 1) WHERE id = $1", [issueId]);
+      }
+      activeVote = null;
+    } else {
+      // 3. Opposite vote clicked -> switch vote
+      await pool.query(
+        "UPDATE issue_votes SET vote_type = $1, created_at = CURRENT_TIMESTAMP WHERE id = $2",
+        [voteType, existing.rows[0].id]
+      );
+      if (voteType === "upvote") {
+        await pool.query(
+          "UPDATE issues SET upvotes_count = upvotes_count + 1, downvotes_count = GREATEST(0, downvotes_count - 1) WHERE id = $1",
+          [issueId]
+        );
+      } else {
+        await pool.query(
+          "UPDATE issues SET downvotes_count = downvotes_count + 1, upvotes_count = GREATEST(0, upvotes_count - 1) WHERE id = $1",
+          [issueId]
+        );
+      }
+      activeVote = voteType;
+    }
+
+    // Return updated issue vote stats
+    const updated = await pool.query(
+      "SELECT id, upvotes_count, downvotes_count, is_duplicate FROM issues WHERE id = $1",
+      [issueId]
+    );
+
+    res.json({
+      success: true,
+      userVote: activeVote,
+      upvotes_count: updated.rows[0]?.upvotes_count || 0,
+      downvotes_count: updated.rows[0]?.downvotes_count || 0,
+      is_duplicate: updated.rows[0]?.is_duplicate || false,
+    });
+  } catch (error) {
+    console.error("Cast vote error:", error.message);
+    res.status(500).json({ error: "Failed to record vote" });
+  }
+});
+
+// GET user's current vote status on an issue
+app.get("/api/issues/:id/vote/:userId", async (req, res) => {
+  const issueId = parseInt(req.params.id, 10);
+  const userId = parseInt(req.params.userId, 10);
+
+  if (!Number.isInteger(issueId) || !Number.isInteger(userId)) {
+    return res.status(400).json({ error: "Invalid issue ID or user ID" });
+  }
+
+  try {
+    const voteRes = await pool.query(
+      "SELECT vote_type FROM issue_votes WHERE issue_id = $1 AND user_id = $2",
+      [issueId, userId]
+    );
+    const issueRes = await pool.query(
+      "SELECT upvotes_count, downvotes_count, is_duplicate FROM issues WHERE id = $1",
+      [issueId]
+    );
+
+    res.json({
+      userVote: voteRes.rows.length > 0 ? voteRes.rows[0].vote_type : null,
+      upvotes_count: issueRes.rows[0]?.upvotes_count || 0,
+      downvotes_count: issueRes.rows[0]?.downvotes_count || 0,
+      is_duplicate: issueRes.rows[0]?.is_duplicate || false,
+    });
+  } catch (error) {
+    console.error("Get vote status error:", error.message);
+    res.status(500).json({ error: "Failed to get vote status" });
+  }
+});
+
+// ==========================================
 // PART 1: NOTIFICATION ENDPOINTS
 // ==========================================
 
@@ -1041,7 +1212,11 @@ app.get("/api/notifications/:userId", async (req, res) => {
         i.city,
         i.block,
         i.latitude as issue_lat,
-        i.longitude as issue_lng
+        i.longitude as issue_lng,
+        i.upvotes_count,
+        i.downvotes_count,
+        i.is_duplicate,
+        i.duplicate_of_id
       FROM notifications n
       LEFT JOIN issues i ON n.issue_id = i.id
       WHERE n.user_id = $1
@@ -1467,6 +1642,26 @@ async function initDatabase() {
         ON notifications(user_id, is_read);
       CREATE INDEX IF NOT EXISTS idx_notifications_issue 
         ON notifications(issue_id);
+    `);
+
+    // 4c. Part 2: Upvotes, Downvotes, Duplicate detection & issue_votes table
+    await pool.query(`
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS upvotes_count INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS downvotes_count INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS is_duplicate BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS duplicate_of_id INTEGER REFERENCES issues(id) ON DELETE SET NULL;
+
+      CREATE TABLE IF NOT EXISTS issue_votes (
+        id SERIAL PRIMARY KEY,
+        issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        vote_type VARCHAR(10) NOT NULL CHECK (vote_type IN ('upvote', 'downvote')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT unique_issue_user_vote UNIQUE (issue_id, user_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_issue_votes_lookup 
+        ON issue_votes(issue_id, user_id);
     `);
 
     // 5. Ensure default demo admin accounts exist with known password

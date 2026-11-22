@@ -449,6 +449,24 @@ function LatestReportsSlider({ issues, language, t, setTrackId, go }) {
                   </em>
                 </div>
                 <h3>{issue.title || issue.description || t("civicIssue")}</h3>
+
+                {/* Part 2: Community Verification Pill & Duplicate Alert */}
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", margin: "6px 0 10px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "#166534", background: "#dcfce7", padding: "2px 8px", borderRadius: "12px", border: "1px solid #bbf7d0", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                    <span>👍</span> {issue.upvotes_count || 0} Verified
+                  </span>
+                  {Number(issue.downvotes_count) > 0 && (
+                    <span style={{ fontSize: "11px", fontWeight: "700", color: "#991b1b", background: "#fee2e2", padding: "2px 8px", borderRadius: "12px", border: "1px solid #fecaca", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                      <span>👎</span> {issue.downvotes_count}
+                    </span>
+                  )}
+                  {issue.is_duplicate && (
+                    <span style={{ fontSize: "10px", fontWeight: "800", color: "#854d0e", background: "#fef9c3", border: "1px solid #fef08a", padding: "2px 6px", borderRadius: "4px" }}>
+                      ⚠️ Duplicate
+                    </span>
+                  )}
+                </div>
+
                 <div className="latest-bottom">
                   <small>{issue.tracking_id}</small>
                   <button
@@ -1327,6 +1345,113 @@ function App() {
                         {translateStatus(tracked.status, language)}
                       </span>
                     </p>
+
+                    {/* Part 2: Community Verification Voting */}
+                    <div style={{ marginTop: "16px", padding: "14px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
+                        <div>
+                          <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#64748b" }}>
+                            Community Verification
+                          </span>
+                          <div style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>
+                            {tracked.upvotes_count || 0} Citizens Verified • {tracked.downvotes_count || 0} Flagged
+                          </div>
+                        </div>
+                        {tracked.is_duplicate && (
+                          <span style={{ fontSize: "11px", fontWeight: "800", color: "#854d0e", background: "#fef9c3", border: "1px solid #fef08a", padding: "3px 8px", borderRadius: "4px" }}>
+                            ⚠️ Merged Duplicate Issue
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", gap: "10px" }}>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!user?.id) {
+                              alert("Please login to cast your community verification vote.");
+                              go("login");
+                              return;
+                            }
+                            try {
+                              const res = await axios.post(`${API}/issues/${tracked.id}/vote`, {
+                                userId: user.id,
+                                voteType: "upvote",
+                              });
+                              setTracked((prev) => ({
+                                ...prev,
+                                upvotes_count: res.data.upvotes_count,
+                                downvotes_count: res.data.downvotes_count,
+                                userVote: res.data.userVote,
+                              }));
+                            } catch {
+                              alert("Could not register vote. Try again.");
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: "8px 14px",
+                            borderRadius: "6px",
+                            border: tracked.userVote === "upvote" ? "1px solid #16a34a" : "1px solid #cbd5e1",
+                            background: tracked.userVote === "upvote" ? "#dcfce7" : "#ffffff",
+                            color: tracked.userVote === "upvote" ? "#15803d" : "#334155",
+                            fontWeight: "700",
+                            fontSize: "12px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <span>👍</span> {tracked.userVote === "upvote" ? "Verified by You" : "Verify Issue (Upvote)"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!user?.id) {
+                              alert("Please login to flag this report.");
+                              go("login");
+                              return;
+                            }
+                            try {
+                              const res = await axios.post(`${API}/issues/${tracked.id}/vote`, {
+                                userId: user.id,
+                                voteType: "downvote",
+                              });
+                              setTracked((prev) => ({
+                                ...prev,
+                                upvotes_count: res.data.upvotes_count,
+                                downvotes_count: res.data.downvotes_count,
+                                userVote: res.data.userVote,
+                              }));
+                            } catch {
+                              alert("Could not register flag. Try again.");
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: "8px 14px",
+                            borderRadius: "6px",
+                            border: tracked.userVote === "downvote" ? "1px solid #dc2626" : "1px solid #cbd5e1",
+                            background: tracked.userVote === "downvote" ? "#fee2e2" : "#ffffff",
+                            color: tracked.userVote === "downvote" ? "#b91c1c" : "#334155",
+                            fontWeight: "700",
+                            fontSize: "12px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <span>👎</span> {tracked.userVote === "downvote" ? "Flagged by You" : "Flag Duplicate/Fake"}
+                        </button>
+                      </div>
+                    </div>
                   </>
                 )}
               </div>

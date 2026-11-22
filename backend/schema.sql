@@ -1,9 +1,4 @@
--- CivicWatch Unified PostgreSQL Database Schema
--- All tables and migrations consolidated in 1 file with strict foreign-key dependency order
-
--- ==============================================================================
 -- 1. USERS TABLE (Citizen Accounts)
--- ==============================================================================
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
@@ -29,9 +24,7 @@ UPDATE users
 SET latitude = 19.0760000, longitude = 72.8777000 
 WHERE latitude IS NULL OR longitude IS NULL;
 
--- ==============================================================================
 -- 2. ADMINS TABLE (Municipal Authority Accounts)
--- ==============================================================================
 CREATE TABLE IF NOT EXISTS admins (
   id SERIAL PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
@@ -55,10 +48,8 @@ ALTER TABLE admins ADD COLUMN IF NOT EXISTS city VARCHAR(100);
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS block VARCHAR(100);
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
 
--- ==============================================================================
 -- 3. ISSUES TABLE (Citizen Complaints & Civic Reports)
 -- Depends on: users (user_id)
--- ==============================================================================
 CREATE TABLE IF NOT EXISTS issues (
   id SERIAL PRIMARY KEY,
   tracking_id VARCHAR(20) UNIQUE NOT NULL,
@@ -78,6 +69,10 @@ CREATE TABLE IF NOT EXISTS issues (
   city VARCHAR(100) DEFAULT 'Mumbai',
   block VARCHAR(100) DEFAULT 'Powai',
   pincode VARCHAR(10),
+  upvotes_count INTEGER NOT NULL DEFAULT 0,
+  downvotes_count INTEGER NOT NULL DEFAULT 0,
+  is_duplicate BOOLEAN NOT NULL DEFAULT FALSE,
+  duplicate_of_id INTEGER REFERENCES issues(id) ON DELETE SET NULL,
   resolved_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -93,12 +88,14 @@ ALTER TABLE issues ADD COLUMN IF NOT EXISTS district VARCHAR(100) DEFAULT 'Mumba
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS block VARCHAR(100) DEFAULT 'Powai';
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS pincode VARCHAR(10);
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS upvotes_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS downvotes_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS is_duplicate BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS duplicate_of_id INTEGER REFERENCES issues(id) ON DELETE SET NULL;
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
 
--- ==============================================================================
 -- 4. NOTIFICATIONS TABLE (Part 1: 10km Nearby Citizen Alerts)
 -- Depends on: users (user_id) AND issues (issue_id)
--- ==============================================================================
 CREATE TABLE IF NOT EXISTS notifications (
   id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -110,19 +107,31 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Index for fast user unread notification retrieval
+-- Indexes for fast user unread notification retrieval
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread 
   ON notifications(user_id, is_read);
 
 CREATE INDEX IF NOT EXISTS idx_notifications_issue 
   ON notifications(issue_id);
 
--- ==============================================================================
--- 5. DEMO SEED DATA (Demo Issues)
--- ==============================================================================
-INSERT INTO issues (tracking_id, title, category, description, department, status, latitude, longitude, state, district, city, block)
+-- 5. ISSUE_VOTES TABLE (Part 2: Community Verification Voting - Upvote/Downvote)
+-- Depends on: users (user_id) AND issues (issue_id)
+CREATE TABLE IF NOT EXISTS issue_votes (
+  id SERIAL PRIMARY KEY,
+  issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  vote_type VARCHAR(10) NOT NULL CHECK (vote_type IN ('upvote', 'downvote')),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_issue_user_vote UNIQUE (issue_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_issue_votes_lookup 
+  ON issue_votes(issue_id, user_id);
+
+-- 6. DEMO SEED DATA (Demo Issues)
+INSERT INTO issues (tracking_id, title, category, description, department, status, latitude, longitude, state, district, city, block, upvotes_count, downvotes_count)
 VALUES
-('CW-DEMO01', 'Pothole near main road', 'Road', 'Pothole reported near the main road', 'Public Works Department (PWD)', 'Pending', 19.0760000, 72.8777000, 'Maharashtra', 'Mumbai Suburban', 'Mumbai', 'Powai'),
-('CW-DEMO02', 'Garbage collection delayed', 'Garbage', 'Garbage collection is delayed in the residential lane', 'Sanitation and Waste Management', 'In Progress', 19.0900000, 72.8650000, 'Maharashtra', 'Mumbai Suburban', 'Mumbai', 'Powai'),
-('CW-DEMO03', 'Streetlight not working', 'Streetlight', 'Streetlight fixture blinking and off for 3 days', 'Street Lighting Department', 'Resolved', 19.1170000, 72.9050000, 'Maharashtra', 'Mumbai Suburban', 'Mumbai', 'Powai')
+('CW-DEMO01', 'Pothole near main road', 'Road', 'Pothole reported near the main road', 'Public Works Department (PWD)', 'Pending', 19.0760000, 72.8777000, 'Maharashtra', 'Mumbai Suburban', 'Mumbai', 'Powai', 18, 1),
+('CW-DEMO02', 'Garbage collection delayed', 'Garbage', 'Garbage collection is delayed in the residential lane', 'Sanitation and Waste Management', 'In Progress', 19.0900000, 72.8650000, 'Maharashtra', 'Mumbai Suburban', 'Mumbai', 'Powai', 12, 0),
+('CW-DEMO03', 'Streetlight not working', 'Streetlight', 'Streetlight fixture blinking and off for 3 days', 'Street Lighting Department', 'Resolved', 19.1170000, 72.9050000, 'Maharashtra', 'Mumbai Suburban', 'Mumbai', 'Powai', 24, 2)
 ON CONFLICT (tracking_id) DO NOTHING;
