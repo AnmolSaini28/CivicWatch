@@ -593,6 +593,7 @@ footer {
   nav .links {
     align-items: center;
   }
+}
 
 /* Complaint form and interactive location picker */
 .complaint-form {
@@ -649,7 +650,6 @@ footer {
 @media (max-width: 650px) {
   .report-map { height: 350px; }
   .location-picker-heading { align-items: flex-start; }
-}
 }
 /* CivicWatch landing page refresh */
 body { background: #fff; color: #12372e; }
@@ -714,9 +714,91 @@ main { max-width: 1240px; padding-top: 45px; padding-bottom: 45px; }
 .issue-category b { font-size: 14px; }
 .issue-category small { color: #819189; font-size: 11px; grid-column: 1; }
 .issue-category i { position: absolute; right: 15px; bottom: 13px; color: #168258; font-style: normal; }
-.latest-section { padding: 54px 0 58px; background: #f5f9f6; }
-.latest-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
-.latest-card { padding: 17px; border: 1px solid #e2ebe5; border-radius: 13px; background: #fff; }
+.latest-section { padding: 54px 0 58px; background: #f5f9f6; overflow: hidden; }
+.latest-header-actions { display: flex; align-items: center; gap: 14px; }
+.slider-nav-btns { display: flex; align-items: center; gap: 8px; }
+.slider-arrow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  margin: 0;
+  border-radius: 50%;
+  border: 1px solid #c7dcd0;
+  background: #ffffff;
+  color: #087454;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.slider-arrow-btn:hover:not(:disabled) {
+  background: #0b4b39;
+  color: #ffffff;
+  border-color: #0b4b39;
+  transform: scale(1.06);
+}
+.slider-arrow-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none;
+}
+.latest-carousel-wrapper {
+  position: relative;
+  width: 100%;
+}
+.latest-carousel-viewport {
+  overflow: hidden;
+  width: 100%;
+  padding: 8px 0 10px 0;
+}
+.latest-carousel-track {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  will-change: transform;
+}
+.latest-carousel-track .latest-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid #e2ebe5;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 18px 20px;
+  box-shadow: 0 2px 8px rgba(11, 75, 57, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.latest-carousel-track .latest-card:hover {
+  transform: translateY(-3px);
+  border-color: #9ccdb1;
+  box-shadow: 0 8px 22px rgba(11, 75, 57, 0.09);
+}
+.latest-carousel-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  margin-top: 14px;
+}
+.latest-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #cdded4;
+  transition: all 0.3s ease;
+}
+.latest-dot.active {
+  width: 22px;
+  background: #0b4b39;
+}
 .latest-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #438268; font-size: 10px; font-weight: 800; text-transform: uppercase; }
 .latest-card h3 { min-height: 38px; margin: 16px 0; color: #213d34; font-size: 14px; }
 .latest-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 12px; border-top: 1px solid #edf1ee; }
@@ -748,7 +830,7 @@ main { max-width: 1240px; padding-top: 45px; padding-bottom: 45px; }
   .snapshot-grid { grid-template-columns: repeat(2,1fr); }
   .steps-grid { grid-template-columns: 1fr; }
   .issue-category-grid { grid-template-columns: repeat(2,1fr); }
-  .latest-grid { grid-template-columns: 1fr; }
+  .latest-header-actions { flex-wrap: wrap; gap: 10px; }
   .cta-inner { align-items: flex-start; flex-direction: column; }
 }
 @media (max-width: 420px) {
@@ -793,7 +875,7 @@ main:has(.landing-page) .landing-page {
 /* Desktop sizing: render the site at an effective 125% scale while
    keeping it fitted to the available browser width. */
 @media (min-width: 1100px) {
-  body {
+  body:not(:has(.cw-admin)) {
     width: 100%;
     max-width: 100%;
     zoom: 1.25;
@@ -806,4 +888,125 @@ main:has(.landing-page) .landing-page {
   .step-card { min-height: 178px; padding: 22px; }
   .issue-category { min-height: 110px; padding: 18px; }
   .latest-card { padding: 19px; }
+}
+
+/* Anonymous toggle card in Report Form */
+.anonymous-toggle-card {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-top: 4px;
+}
+
+/* User Dashboard styles */
+.user-dash-header {
+  background: white;
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 16px rgba(30, 50, 70, 0.04);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.user-dash-title h2 {
+  margin: 0 0 6px;
+  color: #0b3d2e;
+}
+
+.user-dash-title p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.user-dash-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.user-dash-stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 18px 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+}
+
+.user-dash-stat-card b {
+  font-size: 26px;
+  color: #0b3d2e;
+}
+
+.user-dash-stat-card span {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.user-reports-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.user-report-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.user-report-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.user-report-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.anon-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  padding: 4px 9px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.user-report-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+  font-size: 13px;
+  color: #64748b;
 }
