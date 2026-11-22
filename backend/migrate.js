@@ -52,6 +52,7 @@ async function migrate() {
       department VARCHAR(120) NOT NULL DEFAULT 'Municipal Corporation',
       photo_url TEXT,
       user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      is_anonymous BOOLEAN DEFAULT FALSE,
       status VARCHAR(30) NOT NULL DEFAULT 'Pending'
         CHECK (status IN ('Pending', 'In Progress', 'Resolved')),
       latitude NUMERIC(10, 7),
@@ -71,6 +72,26 @@ async function migrate() {
   await pool.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Maharashtra';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
+
+    ALTER TABLE admins ADD COLUMN IF NOT EXISTS admin_level VARCHAR(30) DEFAULT 'CITY';
+    ALTER TABLE admins ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+    ALTER TABLE admins ADD COLUMN IF NOT EXISTS district VARCHAR(100);
+    ALTER TABLE admins ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+    ALTER TABLE admins ADD COLUMN IF NOT EXISTS block VARCHAR(100);
+    ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS title VARCHAR(200);
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS category VARCHAR(100);
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS photo_url TEXT;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS is_anonymous BOOLEAN DEFAULT FALSE;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Maharashtra';
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS district VARCHAR(100) DEFAULT 'Mumbai Suburban';
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS block VARCHAR(100) DEFAULT 'Powai';
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS pincode VARCHAR(10);
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
+  `);
 
     ALTER TABLE admins ADD COLUMN IF NOT EXISTS admin_level VARCHAR(30) DEFAULT 'CITY';
     ALTER TABLE admins ADD COLUMN IF NOT EXISTS state VARCHAR(100);

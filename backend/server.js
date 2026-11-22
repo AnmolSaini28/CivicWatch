@@ -344,8 +344,20 @@ app.post(
   async (req, res) => {
 
     const title = (req.body.title || "").trim();
+    const category = (req.body.category || "").trim() || "Other";
     const description = (req.body.description || "").trim();
     const authority = (req.body.authority || "").trim();
+    const city = (req.body.city || "Mumbai").trim();
+    const state = (req.body.state || "Maharashtra").trim();
+    const district = (req.body.district || "").trim();
+    const block = (req.body.block || "Powai").trim();
+    const pincode = (req.body.pincode || "").trim();
+
+    // Anonymous reporting: either user explicitly checked anonymous, or user is guest/not logged in
+    const isAnonymous =
+      req.body.isAnonymous === "true" ||
+      req.body.isAnonymous === true ||
+      !req.body.userId;
 
     const { latitude, longitude } = req.body;
 
@@ -407,7 +419,8 @@ app.post(
     }
 
     try {
-      // Anonymous complaints have NULL user_id
+      // If user is logged in, attach their userId so they can see it in their dashboard.
+      // If isAnonymous is true, their identity will still be protected from public/admin view.
       let userId = null;
 
       if (req.body.userId) {
@@ -458,7 +471,7 @@ app.post(
         ? `/uploads/${req.file.filename}`
         : null;
 
-      // Insert complaint into PostgreSQL
+      // Insert complaint into PostgreSQL with all synchronized fields
       const result = await pool.query(
         `
         INSERT INTO issues
@@ -470,14 +483,16 @@ app.post(
           department,
           photo_url,
           user_id,
+          is_anonymous,
           latitude,
           longitude,
           city,
           state,
           district,
-          block
+          block,
+          pincode
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         RETURNING
           id,
           tracking_id,
@@ -487,13 +502,15 @@ app.post(
           department,
           photo_url,
           user_id,
+          is_anonymous,
           status,
-          latitude,
-          longitude,
           city,
           state,
           district,
           block,
+          pincode,
+          latitude,
+          longitude,
           created_at
         `,
         [
@@ -504,12 +521,14 @@ app.post(
           authority,
           photoUrl,
           userId,
+          isAnonymous,
           lat,
           lng,
           city,
           state,
           district,
           block,
+          pincode,
         ]
       );
 
@@ -789,7 +808,12 @@ app.get("/api/admin/issues", verifyAdmin, async (req, res) => {
         i.longitude,
         i.created_at,
         i.resolved_at,
-        u.name AS reported_by
+        CASE
+          WHEN i.is_anonymous = TRUE THEN 'Anonymous Citizen'
+          WHEN u.name IS NOT NULL THEN u.name
+          ELSE 'Anonymous Citizen'
+        END AS reported_by,
+        i.is_anonymous
       FROM issues i
       LEFT JOIN users u ON i.user_id = u.id
       ${whereClause}
@@ -803,6 +827,56 @@ app.get("/api/admin/issues", verifyAdmin, async (req, res) => {
 
     res.status(500).json({
       error: "Failed to fetch complaints"
+    });
+  }
+});
+
+// ==========================================
+// USER DASHBOARD - GET OWN COMPLAINTS
+// (Allows registered users to view all their reported complaints,
+// including ones filed anonymously, securely on their personal dashboard)
+// ==========================================
+
+app.get("/api/user/issues/:userId", async (req, res) => {
+  const userId = parseInt(req.params.userId, 10);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ error: "Invalid user ID" });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT
+        id,
+        tracking_id,
+        title,
+        category,
+        description,
+        department,
+        photo_url,
+        status,
+        city,
+        state,
+        district,
+        block,
+        pincode,
+        latitude,
+        longitude,
+        is_anonymous,
+        created_at,
+        resolved_at
+      FROM issues
+      WHERE user_id = $1
+      ORDER BY created_at DESC, id DESC`,
+      [userId]
+    );
+
+    res.json(result.rows);
+
+  } catch (error) {
+    console.error("User get issues:", error.message);
+
+    res.status(500).json({
+      error: "Failed to fetch user complaints"
     });
   }
 });
@@ -1044,6 +1118,7 @@ async function initDatabase() {
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS category VARCHAR(100);
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS photo_url TEXT;
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS is_anonymous BOOLEAN DEFAULT FALSE;
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Maharashtra';
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS district VARCHAR(100) DEFAULT 'Mumbai Suburban';
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';

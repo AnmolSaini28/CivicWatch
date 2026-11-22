@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import axios from "axios";
 import {
@@ -45,6 +45,19 @@ const AUTHORITIES = [
   "Pollution Control Board",
   "Urban Development Authority",
   "Fire and Emergency Services",
+];
+
+const CATEGORIES = [
+  "Road",
+  "Garbage",
+  "Water Supply",
+  "Street Light",
+  "Drainage",
+  "Electricity",
+  "Traffic",
+  "Parks",
+  "Pollution",
+  "Other",
 ];
 
 // Clicking the map selects a complaint location.
@@ -146,7 +159,21 @@ const translations = {
     streetlight: "Streetlight", streetlightText: "Broken public lighting", drainage: "Drainage", drainageText: "Blocked drains & flooding", otherIssue: "Other", otherText: "Other public issues",
     latestReports: "Latest community reports", publicTransparency: "PUBLIC TRANSPARENCY", reportsIntro: "Real issue data, updated from your CivicWatch database.", viewDashboard: "View dashboard", trackReport: "Track report",
     pendingLabel: "Pending", inProgressLabel: "In Progress", resolvedLabel: "Resolved", voiceDifference: "YOUR VOICE MAKES A DIFFERENCE", ctaTitle: "See something that needs attention?", ctaText: "Help make your neighborhood better, one report at a time.",
-    footerAbout: "Community-powered visibility for public issues. A project prototype, not an official government portal.", submitLink: "Submit a report", reportRoadTitle: "Pothole reported near the main road", reportGarbageTitle: "Garbage collection is delayed", everyReport: "Every report matters", reportTrackImprove: "Report · Track · Improve"
+    footerAbout: "Community-powered visibility for public issues. A project prototype, not an official government portal.", submitLink: "Submit a report", reportRoadTitle: "Pothole reported near the main road", reportGarbageTitle: "Garbage collection is delayed", everyReport: "Every report matters", reportTrackImprove: "Report · Track · Improve",
+    category: "Category", selectCategory: "-- Select Category --",
+    cat_Road: "Road", cat_Garbage: "Garbage", cat_WaterSupply: "Water Supply", cat_StreetLight: "Street Light",
+    cat_Drainage: "Drainage", cat_Electricity: "Electricity", cat_Traffic: "Traffic", cat_Parks: "Parks & Gardens",
+    cat_Pollution: "Pollution", cat_Other: "Other",
+    state: "State", city: "City", block: "Area / Ward / Block", pincode: "Pincode",
+    pincodePlaceholder: "e.g. 400076", blockPlaceholder: "e.g. Powai / Ward 5", cityPlaceholder: "e.g. Mumbai", statePlaceholder: "e.g. Maharashtra",
+    anonymousReportTitle: "Report Anonymously (Identity Protected)",
+    anonymousHelpLogged: "Your name and contact details will NOT be shown to admins, government officers, or on public maps. It will only be visible in your private citizen dashboard.",
+    anonymousHelpGuest: "You are not signed in. This complaint will be submitted completely anonymously without any personal details.",
+    anonymousBadge: "Anonymous (Identity Protected)", registeredBadge: "Registered Citizen",
+    myReports: "My Reports", citizenDashboard: "Citizen Dashboard",
+    citizenDashboardSubtitle: "View and track all complaints you have submitted, including anonymous ones.",
+    noMyReports: "You have not submitted any complaints yet.", reportNewComplaint: "Report a New Problem",
+    dateSubmitted: "Submitted on", locationLabel: "Location"
   },
   hi: {
     home: "होम", map: "नक्शा", dashboard: "डैशबोर्ड", track: "ट्रैक करें",
@@ -208,7 +235,21 @@ const translations = {
     streetlight: "स्ट्रीट लाइट", streetlightText: "खराब सार्वजनिक रोशनी", drainage: "जल निकासी", drainageText: "जाम नालियाँ और जलभराव", otherIssue: "अन्य", otherText: "अन्य सार्वजनिक समस्याएँ",
     latestReports: "समुदाय की हाल की रिपोर्ट", publicTransparency: "सार्वजनिक पारदर्शिता", reportsIntro: "आपके CivicWatch डेटाबेस से अपडेट किया गया वास्तविक समस्या डेटा।", viewDashboard: "डैशबोर्ड देखें", trackReport: "रिपोर्ट ट्रैक करें",
     pendingLabel: "लंबित", inProgressLabel: "प्रगति पर", resolvedLabel: "हल हो गया", voiceDifference: "आपकी आवाज़ बदलाव ला सकती है", ctaTitle: "क्या आपने कोई ऐसी समस्या देखी है जिस पर ध्यान देना चाहिए?", ctaText: "एक-एक रिपोर्ट के ज़रिए अपने मोहल्ले को बेहतर बनाएँ।",
-    footerAbout: "समुदाय की भागीदारी से सार्वजनिक समस्याओं को सामने लाने का मंच। यह एक प्रोजेक्ट प्रोटोटाइप है, आधिकारिक सरकारी पोर्टल नहीं।", submitLink: "रिपोर्ट दर्ज करें", reportRoadTitle: "मुख्य सड़क के पास गड्ढे की रिपोर्ट", reportGarbageTitle: "कचरा संग्रह में देरी", everyReport: "हर रिपोर्ट महत्वपूर्ण है", reportTrackImprove: "रिपोर्ट करें · ट्रैक करें · सुधारें"
+    footerAbout: "समुदाय की भागीदारी से सार्वजनिक समस्याओं को सामने लाने का मंच। यह एक प्रोजेक्ट प्रोटोटाइप है, आधिकारिक सरकारी पोर्टल नहीं।", submitLink: "रिपोर्ट दर्ज करें", reportRoadTitle: "मुख्य सड़क के पास गड्ढे की रिपोर्ट", reportGarbageTitle: "कचरा संग्रह में देरी", everyReport: "हर रिपोर्ट महत्वपूर्ण है", reportTrackImprove: "रिपोर्ट करें · ट्रैक करें · सुधारें",
+    category: "श्रेणी", selectCategory: "-- श्रेणी चुनें --",
+    cat_Road: "सड़क", cat_Garbage: "कचरा", cat_WaterSupply: "जल आपूर्ति", cat_StreetLight: "स्ट्रीट लाइट",
+    cat_Drainage: "जल निकासी", cat_Electricity: "बिजली", cat_Traffic: "यातायात", cat_Parks: "पार्क और उद्यान",
+    cat_Pollution: "प्रदूषण", cat_Other: "अन्य",
+    state: "राज्य", city: "शहर", block: "क्षेत्र / वार्ड / ब्लॉक", pincode: "पिनकोड",
+    pincodePlaceholder: "उदा. 400076", blockPlaceholder: "उदा. पवई / वार्ड 5", cityPlaceholder: "उदा. मुंबई", statePlaceholder: "उदा. महाराष्ट्र",
+    anonymousReportTitle: "गुमनाम रूप से शिकायत दर्ज करें (पहचान सुरक्षित)",
+    anonymousHelpLogged: "आपका नाम या संपर्क विवरण किसी भी एडमिन, सरकारी अधिकारी या नक्शे पर नहीं दिखेगा। यह सिर्फ आपके व्यक्तिगत डैशबोर्ड पर दिखाई देगा।",
+    anonymousHelpGuest: "आप लॉग इन नहीं हैं। यह शिकायत पूरी तरह गुमनाम रूप से दर्ज की जाएगी।",
+    anonymousBadge: "गुमनाम (पहचान सुरक्षित)", registeredBadge: "पंजीकृत नागरिक",
+    myReports: "मेरी रिपोर्ट", citizenDashboard: "नागरिक डैशबोर्ड",
+    citizenDashboardSubtitle: "आपके द्वारा दर्ज की गई सभी शिकायतें यहाँ देखें, जिसमें गुमनाम रिपोर्ट भी शामिल हैं।",
+    noMyReports: "आपने अभी तक कोई शिकायत दर्ज नहीं की है।", reportNewComplaint: "नई शिकायत दर्ज करें",
+    dateSubmitted: "दर्ज करने की तारीख", locationLabel: "स्थान"
   },
 };
 
@@ -260,10 +301,17 @@ function App() {
   });
   const [trackId, setTrackId] = useState("");
   const [tracked, setTracked] = useState(null);
+  const [userReports, setUserReports] = useState([]);
   const [complaint, setComplaint] = useState({
     title: "",
+    category: "Road",
     description: "",
     authority: "",
+    state: "Maharashtra",
+    city: "Mumbai",
+    block: "Powai",
+    pincode: "",
+    isAnonymous: false,
     latitude: null,
     longitude: null,
   });
@@ -280,10 +328,32 @@ function App() {
       .get(API + "/dashboard")
       .then((response) => setDash(response.data))
       .catch(() => setDash(null));
+
+  const loadUserReports = useCallback(async () => {
+    if (!user?.id) {
+      setUserReports([]);
+      return;
+    }
+    try {
+      const response = await axios.get(`${API}/user/issues/${user.id}`);
+      setUserReports(response.data);
+    } catch {
+      setUserReports([]);
+    }
+  }, [user]);
+
   useEffect(() => {
     loadIssues();
     loadDash();
   }, []);
+
+  useEffect(() => {
+    if (user?.id) {
+      loadUserReports();
+    } else {
+      setUserReports([]);
+    }
+  }, [user, loadUserReports]);
 
   // Keep only issues with valid geographic coordinates.
 
@@ -487,8 +557,14 @@ function App() {
     }
     const formData = new FormData();
     formData.append("title", complaint.title.trim());
+    formData.append("category", complaint.category || "Other");
     formData.append("description", complaint.description.trim());
     formData.append("authority", complaint.authority);
+    formData.append("state", (complaint.state || "Maharashtra").trim());
+    formData.append("city", (complaint.city || "Mumbai").trim());
+    formData.append("block", (complaint.block || "Powai").trim());
+    formData.append("pincode", (complaint.pincode || "").trim());
+    formData.append("isAnonymous", String(Boolean(complaint.isAnonymous || !user)));
     formData.append("latitude", String(complaint.latitude));
     formData.append("longitude", String(complaint.longitude));
     if (user?.id) formData.append("userId", String(user.id));
@@ -502,11 +578,23 @@ function App() {
         type: "success",
         text: `${t("submitSuccess")} ${created.tracking_id}`,
       });
-      setComplaint({ title: "", description: "", authority: "", latitude: null, longitude: null });
+      setComplaint({
+        title: "",
+        category: "Road",
+        description: "",
+        authority: "",
+        state: "Maharashtra",
+        city: "Mumbai",
+        block: "Powai",
+        pincode: "",
+        isAnonymous: false,
+        latitude: null,
+        longitude: null,
+      });
       setComplaintPhoto(null);
       const photoInput = formElement.querySelector('input[type="file"]');
       if (photoInput) photoInput.value = "";
-      await Promise.all([loadIssues(), loadDash()]);
+      await Promise.all([loadIssues(), loadDash(), loadUserReports()]);
     } catch (error) {
       setComplaintMessage({
         type: "error",
@@ -548,6 +636,23 @@ function App() {
         <div className="auth">
           {user ? (
             <>
+              <button
+                onClick={() => go("user-dashboard")}
+                className={page === "user-dashboard" ? "active" : ""}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontWeight: "600",
+                  background: page === "user-dashboard" ? "#1b5e45" : "rgba(255,255,255,0.15)",
+                  color: "#ffffff",
+                  borderRadius: "6px",
+                  padding: "7px 11px",
+                }}
+                title={t("citizenDashboard")}
+              >
+                📋 {t("myReports")}{userReports.length > 0 ? ` (${userReports.length})` : ""}
+              </button>
               <span className="hello">
                 {t("hello")} {user.name.split(" ")[0]}
               </span>
@@ -654,25 +759,110 @@ function App() {
               {user ? ` ${t("signedInAs")} ${user.name}.` : ` ${t("anonymousSubmit")}`}
             </p>
             <form className="form complaint-form" onSubmit={submitComplaint}>
-              <label>
-                {t("complaintTitle")} *
-                <input value={complaint.title} onChange={(event) => setComplaint({ ...complaint, title: event.target.value })} maxLength={200} placeholder={t("complaintTitlePlaceholder")} required />
-              </label>
+              <div className="grid2">
+                <label>
+                  {t("complaintTitle")} *
+                  <input
+                    value={complaint.title}
+                    onChange={(event) => setComplaint({ ...complaint, title: event.target.value })}
+                    maxLength={200}
+                    placeholder={t("complaintTitlePlaceholder")}
+                    required
+                  />
+                </label>
+                <label>
+                  {t("category")} *
+                  <select
+                    value={complaint.category}
+                    onChange={(event) => setComplaint({ ...complaint, category: event.target.value })}
+                    required
+                  >
+                    {CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {t(`cat_${cat.replace(/\s+/g, "")}`) || cat}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid2">
+                <label>
+                  {t("forwardAuthority")} *
+                  <select
+                    value={complaint.authority}
+                    onChange={(event) => setComplaint({ ...complaint, authority: event.target.value })}
+                    required
+                  >
+                    <option value="">{t("selectAuthority")}</option>
+                    {AUTHORITIES.map((authority, index) => (
+                      <option key={authority} value={authority}>
+                        {t(`authority${index}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  {t("uploadPhoto")}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={(event) => setComplaintPhoto(event.target.files?.[0] || null)}
+                  />
+                </label>
+              </div>
+
               <label>
                 {t("description")} *
-                <textarea value={complaint.description} onChange={(event) => setComplaint({ ...complaint, description: event.target.value })} placeholder={t("descriptionPlaceholder")} required />
+                <textarea
+                  value={complaint.description}
+                  onChange={(event) => setComplaint({ ...complaint, description: event.target.value })}
+                  placeholder={t("descriptionPlaceholder")}
+                  required
+                />
               </label>
-              <label>
-                {t("forwardAuthority")} *
-                <select value={complaint.authority} onChange={(event) => setComplaint({ ...complaint, authority: event.target.value })} required>
-                  <option value="">{t("selectAuthority")}</option>
-                  {AUTHORITIES.map((authority, index) => <option key={authority} value={authority}>{t(`authority${index}`)}</option>)}
-                </select>
-              </label>
-              <label>
-                {t("uploadPhoto")}
-                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => setComplaintPhoto(event.target.files?.[0] || null)} />
-              </label>
+
+              <div className="grid2">
+                <label>
+                  {t("state")} *
+                  <input
+                    value={complaint.state}
+                    onChange={(event) => setComplaint({ ...complaint, state: event.target.value })}
+                    placeholder={t("statePlaceholder")}
+                    required
+                  />
+                </label>
+                <label>
+                  {t("city")} *
+                  <input
+                    value={complaint.city}
+                    onChange={(event) => setComplaint({ ...complaint, city: event.target.value })}
+                    placeholder={t("cityPlaceholder")}
+                    required
+                  />
+                </label>
+              </div>
+
+              <div className="grid2">
+                <label>
+                  {t("block")} *
+                  <input
+                    value={complaint.block}
+                    onChange={(event) => setComplaint({ ...complaint, block: event.target.value })}
+                    placeholder={t("blockPlaceholder")}
+                    required
+                  />
+                </label>
+                <label>
+                  {t("pincode")}
+                  <input
+                    value={complaint.pincode}
+                    onChange={(event) => setComplaint({ ...complaint, pincode: event.target.value })}
+                    placeholder={t("pincodePlaceholder")}
+                    maxLength={6}
+                  />
+                </label>
+              </div>
               <div className="location-picker-heading">
                 <div>
                   <h3>{t("chooseLocation")} *</h3>
@@ -698,6 +888,28 @@ function App() {
                   <span><b>{t("longitude")}:</b> {complaint.longitude}</span>
                 </div>
               ) : <p className="muted">{t("noLocation")}</p>}
+
+              {/* Anonymous Reporting Option */}
+              <div className="anonymous-toggle-card">
+                <label style={{ display: "flex", flexDirection: "row", alignItems: "flex-start", gap: "12px", cursor: user ? "pointer" : "default", margin: 0, fontWeight: "normal" }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(complaint.isAnonymous || !user)}
+                    disabled={!user}
+                    onChange={(e) => setComplaint({ ...complaint, isAnonymous: e.target.checked })}
+                    style={{ width: "20px", height: "20px", marginTop: "2px", accentColor: "#0b6848", cursor: user ? "pointer" : "default" }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: "700", fontSize: "15px", color: "#0b3d2e", display: "flex", alignItems: "center", gap: "6px" }}>
+                      🛡️ {t("anonymousReportTitle")}
+                    </div>
+                    <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#4b5563", lineHeight: "1.4" }}>
+                      {user ? t("anonymousHelpLogged") : t("anonymousHelpGuest")}
+                    </p>
+                  </div>
+                </label>
+              </div>
+
               {complaintMessage.text && <div className={`authmsg ${complaintMessage.type}`} role="alert">{complaintMessage.text}</div>}
               <button className="primary" type="submit" disabled={complaintBusy}>{complaintBusy ? t("submitting") : t("submit")}</button>
             </form>
@@ -825,6 +1037,130 @@ function App() {
                     </p>
                   </>
                 )}
+              </div>
+            )}
+          </section>
+        )}
+        {/* CITIZEN DASHBOARD (MY REPORTS) */}
+        {page === "user-dashboard" && (
+          <section className="user-dashboard-section">
+            <div className="user-dash-header">
+              <div className="user-dash-title">
+                <h2>👤 {user ? user.name : "Citizen"}'s {t("citizenDashboard")}</h2>
+                <p>{t("citizenDashboardSubtitle")}</p>
+              </div>
+              <button className="primary" onClick={() => go("report")}>
+                + {t("reportNewComplaint")}
+              </button>
+            </div>
+
+            <div className="user-dash-stats">
+              <div className="user-dash-stat-card">
+                <b>{userReports.length}</b>
+                <span>{t("totalReports")}</span>
+              </div>
+              <div className="user-dash-stat-card">
+                <b style={{ color: "#d97706" }}>
+                  {userReports.filter((r) => String(r.status).toLowerCase() === "pending").length}
+                </b>
+                <span>{t("pending")}</span>
+              </div>
+              <div className="user-dash-stat-card">
+                <b style={{ color: "#2563eb" }}>
+                  {userReports.filter((r) => String(r.status).toLowerCase() === "in progress").length}
+                </b>
+                <span>{t("inProgress")}</span>
+              </div>
+              <div className="user-dash-stat-card">
+                <b style={{ color: "#16a34a" }}>
+                  {userReports.filter((r) => String(r.status).toLowerCase() === "resolved").length}
+                </b>
+                <span>{t("resolved")}</span>
+              </div>
+            </div>
+
+            {!user ? (
+              <div className="empty" style={{ background: "white", borderRadius: "12px", textAlign: "center", padding: "40px 20px" }}>
+                <p style={{ fontSize: "16px", color: "#64748b" }}>Please log in to view your citizen dashboard and submitted reports.</p>
+                <button className="primary" onClick={() => go("login")} style={{ marginTop: "12px" }}>
+                  {t("login")}
+                </button>
+              </div>
+            ) : userReports.length === 0 ? (
+              <div className="empty" style={{ background: "white", borderRadius: "12px", textAlign: "center", padding: "40px 20px" }}>
+                <p style={{ fontSize: "16px", color: "#64748b" }}>{t("noMyReports")}</p>
+                <button className="primary" onClick={() => go("report")} style={{ marginTop: "12px" }}>
+                  {t("reportNewComplaint")}
+                </button>
+              </div>
+            ) : (
+              <div className="user-reports-list">
+                {userReports.map((report) => (
+                  <article className="user-report-card" key={report.id}>
+                    <div className="user-report-top">
+                      <div className="user-report-meta">
+                        <span className="category-pill" style={{ background: "#f1f5f9", padding: "4px 10px", borderRadius: "6px", fontWeight: "700", fontSize: "12px", color: "#334155" }}>
+                          {report.category || "Issue"}
+                        </span>
+                        <span className={"status " + statusClass(report.status)}>
+                          {translateStatus(report.status, language)}
+                        </span>
+                        {report.is_anonymous ? (
+                          <span className="anon-badge" title="Your identity is protected from public and government admins">
+                            🛡️ {t("anonymousBadge")}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "500" }}>
+                            ✓ {t("registeredBadge")}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontFamily: "monospace", fontWeight: "700", color: "#0b3d2e", background: "#f0fdf4", padding: "3px 8px", borderRadius: "4px", fontSize: "13px" }}>
+                          {report.tracking_id}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setTrackId(report.tracking_id);
+                            go("track");
+                          }}
+                          style={{ padding: "4px 9px", fontSize: "12px" }}
+                        >
+                          {t("trackButton")} →
+                        </button>
+                      </div>
+                    </div>
+
+                    <h3 style={{ margin: "4px 0", fontSize: "18px", color: "#0f172a" }}>
+                      {report.title}
+                    </h3>
+                    <p style={{ margin: "0", color: "#475569", lineHeight: "1.5", fontSize: "14px" }}>
+                      {report.description}
+                    </p>
+
+                    {report.photo_url && (
+                      <div style={{ marginTop: "6px" }}>
+                        <img
+                          src={report.photo_url.startsWith("http") ? report.photo_url : `http://localhost:5001${report.photo_url}`}
+                          alt="Complaint evidence"
+                          style={{ maxHeight: "140px", borderRadius: "8px", objectFit: "cover", border: "1px solid #e2e8f0" }}
+                        />
+                      </div>
+                    )}
+
+                    <div className="user-report-bottom">
+                      <div>
+                        🏢 <b>{t("department")}:</b> {report.department}
+                      </div>
+                      <div>
+                        📍 <b>{t("locationLabel")}:</b> {[report.block, report.city, report.state].filter(Boolean).join(", ")} {report.pincode ? `(${report.pincode})` : ""}
+                      </div>
+                      <div>
+                        📅 <b>{t("dateSubmitted")}:</b> {report.created_at ? new Date(report.created_at).toLocaleDateString() : "Recently"}
+                      </div>
+                    </div>
+                  </article>
+                ))}
               </div>
             )}
           </section>

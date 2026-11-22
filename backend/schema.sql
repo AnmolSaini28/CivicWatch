@@ -70,6 +70,7 @@ ALTER TABLE issues ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS block VARCHAR(100) DEFAULT 'Powai';
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS pincode VARCHAR(10);
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS is_anonymous BOOLEAN DEFAULT FALSE;
 
 -- Demo issues for testing
 INSERT INTO issues (tracking_id, title, category, description, department, status, latitude, longitude, state, district, city, block)
