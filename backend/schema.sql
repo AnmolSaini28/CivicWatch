@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS issues (
   department VARCHAR(120) NOT NULL DEFAULT 'Municipal Corporation',
   photo_url TEXT,
   user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  is_anonymous BOOLEAN DEFAULT FALSE,
   status VARCHAR(30) NOT NULL DEFAULT 'Pending'
     CHECK (status IN ('Pending', 'In Progress', 'Resolved')),
   latitude NUMERIC(10, 7),

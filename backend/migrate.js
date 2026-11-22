@@ -92,25 +92,6 @@ async function migrate() {
     ALTER TABLE issues ADD COLUMN IF NOT EXISTS pincode VARCHAR(10);
     ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
   `);
-
-    ALTER TABLE admins ADD COLUMN IF NOT EXISTS admin_level VARCHAR(30) DEFAULT 'CITY';
-    ALTER TABLE admins ADD COLUMN IF NOT EXISTS state VARCHAR(100);
-    ALTER TABLE admins ADD COLUMN IF NOT EXISTS district VARCHAR(100);
-    ALTER TABLE admins ADD COLUMN IF NOT EXISTS city VARCHAR(100);
-    ALTER TABLE admins ADD COLUMN IF NOT EXISTS block VARCHAR(100);
-    ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
-
-    ALTER TABLE issues ADD COLUMN IF NOT EXISTS title VARCHAR(200);
-    ALTER TABLE issues ADD COLUMN IF NOT EXISTS category VARCHAR(100);
-    ALTER TABLE issues ADD COLUMN IF NOT EXISTS photo_url TEXT;
-    ALTER TABLE issues ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
-    ALTER TABLE issues ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Maharashtra';
-    ALTER TABLE issues ADD COLUMN IF NOT EXISTS district VARCHAR(100) DEFAULT 'Mumbai Suburban';
-    ALTER TABLE issues ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
-    ALTER TABLE issues ADD COLUMN IF NOT EXISTS block VARCHAR(100) DEFAULT 'Powai';
-    ALTER TABLE issues ADD COLUMN IF NOT EXISTS pincode VARCHAR(10);
-    ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
-  `);
   console.log("✓ Geographic hierarchy and optional columns verified");
 
   // Populate city/state for existing issues that have NULL
