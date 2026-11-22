@@ -1,13 +1,15 @@
-require("dotenv").config();
+
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
-const path = require("path");
 const fs = require("fs");
 const pool = require("./db");
+
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -18,6 +20,10 @@ app.use(express.json());
 const uploadDirectory = path.join(__dirname, "uploads");
 fs.mkdirSync(uploadDirectory, { recursive: true });
 app.use("/uploads", express.static(uploadDirectory));
+
+// ==========================================
+// AUTHORITIES
+// ==========================================
 
 const AUTHORITIES = [
   "Municipal Corporation",
@@ -33,115 +39,6 @@ const AUTHORITIES = [
   "Urban Development Authority",
   "Fire and Emergency Services",
 ];
-
-// ==========================================
-// REVERSE GEOCODING
-// ==========================================
-
-const reverseGeocodeCache = new Map();
-let nominatimQueue = Promise.resolve();
-let lastNominatimRequestAt = 0;
-
-function requestNominatim(url) {
-  const request = nominatimQueue.then(async () => {
-    const waitMs = Math.max(
-      0,
-      1000 - (Date.now() - lastNominatimRequestAt)
-    );
-
-    if (waitMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
-    }
-
-    lastNominatimRequestAt = Date.now();
-
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "CivicWatch/1.0 (civic issue reporting application)",
-        "Accept-Language": "en",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Nominatim returned HTTP ${response.status}`);
-    }
-
-    return response.json();
-  });
-
-  nominatimQueue = request.then(() => undefined, () => undefined);
-
-  return request;
-}
-
-function getLocationDetails(geocodeResult) {
-  const address = geocodeResult.address || {};
-
-  const city =
-    address.city ||
-    address.town ||
-    address.municipality ||
-    address.village ||
-    address.county ||
-    address.state_district ||
-    "";
-
-  const state = address.state || address.region || "";
-
-  const isNamedPlace = [
-    "amenity",
-    "building",
-    "leisure",
-    "tourism",
-    "shop",
-    "office",
-    "historic",
-    "university",
-    "man_made",
-  ].some((key) => address[key]);
-
-  const areaCandidates = [
-    ...(isNamedPlace ? [geocodeResult.name] : []),
-    address.neighbourhood,
-    address.suburb,
-    address.quarter,
-    address.residential,
-    address.hamlet,
-    address.locality,
-  ];
-
-  const areaParts = [];
-
-  for (const candidate of areaCandidates) {
-    const value = String(candidate || "").trim();
-
-    if (
-      value &&
-      value.toLowerCase() !== city.toLowerCase() &&
-      !areaParts.some(
-        (part) => part.toLowerCase() === value.toLowerCase()
-      )
-    ) {
-      areaParts.push(value);
-    }
-  }
-
-  if (areaParts.length === 0) {
-    const fallbackArea =
-      address.road ||
-      (geocodeResult.name && geocodeResult.name !== city
-        ? geocodeResult.name
-        : "");
-
-    if (fallbackArea) areaParts.push(String(fallbackArea).trim());
-  }
-
-  return {
-    location: areaParts.join(", "),
-    city: String(city).trim(),
-    state: String(state).trim(),
-  };
-}
 
 // ==========================================
 // PHOTO UPLOAD CONFIGURATION
@@ -205,16 +102,15 @@ function makeTrackingId() {
   );
 }
 
-// ==========================================
+
 // ADMIN AUTHENTICATION MIDDLEWARE
-// ==========================================
 
 async function verifyAdmin(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({
-      error: "Admin authentication required",
+      error: "Admin authentication required"
     });
   }
 
@@ -232,7 +128,7 @@ async function verifyAdmin(req, res, next) {
       !Number.isInteger(decoded.adminId)
     ) {
       return res.status(403).json({
-        error: "Admin access only",
+        error: "Admin access only"
       });
     }
 
@@ -245,11 +141,12 @@ async function verifyAdmin(req, res, next) {
 
     if (result.rows.length === 0) {
       return res.status(403).json({
-        error: "Admin account is inactive or unavailable",
+        error: "Admin account is inactive or unavailable"
       });
     }
 
     req.admin = result.rows[0];
+
     next();
 
   } catch (error) {
@@ -259,14 +156,14 @@ async function verifyAdmin(req, res, next) {
       error.name === "NotBeforeError"
     ) {
       return res.status(401).json({
-        error: "Invalid or expired token",
+        error: "Invalid or expired token"
       });
     }
 
     console.error("Admin verification:", error.message);
 
     return res.status(500).json({
-      error: "Could not verify admin",
+      error: "Could not verify admin"
     });
   }
 }
@@ -290,80 +187,6 @@ app.get("/api/authorities", (_req, res) => {
 });
 
 // ==========================================
-// REVERSE GEOCODE SELECTED MAP LOCATION
-// ==========================================
-
-app.get("/api/location/reverse", async (req, res) => {
-  const latitude = Number(req.query.lat);
-  const longitude = Number(req.query.lon);
-
-  if (
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude) ||
-    latitude < -90 ||
-    latitude > 90 ||
-    longitude < -180 ||
-    longitude > 180
-  ) {
-    return res.status(400).json({
-      error: "Please provide valid map coordinates.",
-    });
-  }
-
-  const cacheKey = `${latitude.toFixed(5)},${longitude.toFixed(5)}`;
-
-  try {
-    let locationDetails = reverseGeocodeCache.get(cacheKey);
-
-    if (!locationDetails) {
-      const nominatimUrl = new URL(
-        "https://nominatim.openstreetmap.org/reverse"
-      );
-
-      nominatimUrl.search = new URLSearchParams({
-        format: "jsonv2",
-        lat: String(latitude),
-        lon: String(longitude),
-        zoom: "18",
-        addressdetails: "1",
-      }).toString();
-
-      const geocodeResult = await requestNominatim(nominatimUrl);
-
-      locationDetails = getLocationDetails(geocodeResult);
-
-      if (
-        !locationDetails.location ||
-        !locationDetails.city ||
-        !locationDetails.state
-      ) {
-        return res.status(422).json({
-          error:
-            "Could not identify the area, city and state for this point. Please select another nearby point.",
-        });
-      }
-
-      if (reverseGeocodeCache.size >= 500) {
-        const oldestKey = reverseGeocodeCache.keys().next().value;
-        reverseGeocodeCache.delete(oldestKey);
-      }
-
-      reverseGeocodeCache.set(cacheKey, locationDetails);
-    }
-
-    return res.json(locationDetails);
-
-  } catch (error) {
-    console.error("Reverse geocode:", error.message);
-
-    return res.status(502).json({
-      error:
-        "Could not retrieve location details right now. Please try another map point.",
-    });
-  }
-});
-
-// ==========================================
 // GET ALL ISSUES
 // ==========================================
 
@@ -380,9 +203,11 @@ app.get("/api/issues", async (_req, res) => {
         photo_url,
         user_id,
         status,
-        location,
-        city,
         state,
+        district,
+        city,
+        block,
+        pincode,
         latitude,
         longitude,
         created_at
@@ -476,11 +301,15 @@ app.get(
           department,
           photo_url,
           status,
-          location,
-          city,
           state,
+          district,
+          city,
+          block,
+          pincode,
           latitude,
-          longitude
+          longitude,
+          created_at,
+          resolved_at
         FROM issues
         WHERE UPPER(tracking_id) = UPPER($1)
         `,
@@ -517,27 +346,17 @@ app.post(
     const title = (req.body.title || "").trim();
     const description = (req.body.description || "").trim();
     const authority = (req.body.authority || "").trim();
-    const location = (req.body.location || "").trim();
-    const city = (req.body.city || "").trim();
-    const state = (req.body.state || "").trim();
 
     const { latitude, longitude } = req.body;
 
-    if (
-      !title ||
-      !description ||
-      !authority ||
-      !location ||
-      !city ||
-      !state
-    ) {
+    // Validate required fields
+    if (!title || !description || !authority) {
       if (req.file) {
         fs.unlink(req.file.path, () => {});
       }
 
       return res.status(400).json({
-        error:
-          "Title, description, authority, location, city and state are required.",
+        error: "Title, description and authority are required.",
       });
     }
 
@@ -551,20 +370,7 @@ app.post(
       });
     }
 
-    if (
-      location.length > 150 ||
-      city.length > 100 ||
-      state.length > 100
-    ) {
-      if (req.file) {
-        fs.unlink(req.file.path, () => {});
-      }
-
-      return res.status(400).json({
-        error: "Location, city or state exceeds the allowed length.",
-      });
-    }
-
+    // Validate authority
     if (!AUTHORITIES.includes(authority)) {
       if (req.file) {
         fs.unlink(req.file.path, () => {});
@@ -575,6 +381,7 @@ app.post(
       });
     }
 
+    // Validate latitude and longitude
     const lat = Number(latitude);
     const lng = Number(longitude);
 
@@ -600,6 +407,7 @@ app.post(
     }
 
     try {
+      // Anonymous complaints have NULL user_id
       let userId = null;
 
       if (req.body.userId) {
@@ -621,6 +429,7 @@ app.post(
         userId = userResult.rows[0].id;
       }
 
+      // Generate unique tracking ID
       let trackingId = makeTrackingId();
 
       let duplicate = await pool.query(
@@ -637,10 +446,19 @@ app.post(
         );
       }
 
+      // Optional geographic and category details with defaults
+      const category = (req.body.category || "").trim() || title;
+      const city = (req.body.city || "").trim() || "Mumbai";
+      const state = (req.body.state || "").trim() || "Maharashtra";
+      const district = (req.body.district || "").trim() || "Mumbai Suburban";
+      const block = (req.body.block || "").trim() || "Powai";
+
+      // Photo URL
       const photoUrl = req.file
         ? `/uploads/${req.file.filename}`
         : null;
 
+      // Insert complaint into PostgreSQL
       const result = await pool.query(
         `
         INSERT INTO issues
@@ -652,13 +470,14 @@ app.post(
           department,
           photo_url,
           user_id,
-          location,
+          latitude,
+          longitude,
           city,
           state,
-          latitude,
-          longitude
+          district,
+          block
         )
-        VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING
           id,
           tracking_id,
@@ -669,25 +488,28 @@ app.post(
           photo_url,
           user_id,
           status,
-          location,
-          city,
-          state,
           latitude,
           longitude,
+          city,
+          state,
+          district,
+          block,
           created_at
         `,
         [
           trackingId,
           title,
+          category,
           description,
           authority,
           photoUrl,
           userId,
-          location,
-          city,
-          state,
           lat,
           lng,
+          city,
+          state,
+          district,
+          block,
         ]
       );
 
@@ -842,9 +664,8 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-// ==========================================
+
 // ADMIN LOGIN
-// ==========================================
 
 app.post("/api/admin/login", async (req, res) => {
   const { email, password } = req.body;
@@ -856,7 +677,7 @@ app.post("/api/admin/login", async (req, res) => {
     !password
   ) {
     return res.status(400).json({
-      error: "Email and password are required",
+      error: "Email and password are required"
     });
   }
 
@@ -870,7 +691,7 @@ app.post("/api/admin/login", async (req, res) => {
 
     if (result.rows.length === 0) {
       return res.status(401).json({
-        error: "Invalid admin credentials",
+        error: "Invalid admin credentials"
       });
     }
 
@@ -883,19 +704,19 @@ app.post("/api/admin/login", async (req, res) => {
 
     if (!isValid) {
       return res.status(401).json({
-        error: "Invalid admin credentials",
+        error: "Invalid admin credentials"
       });
     }
 
     const token = jwt.sign(
       {
         adminId: admin.id,
-        type: "admin",
+        type: "admin"
       },
       process.env.JWT_SECRET,
       {
         algorithm: "HS256",
-        expiresIn: "8h",
+        expiresIn: "8h"
       }
     );
 
@@ -906,21 +727,25 @@ app.post("/api/admin/login", async (req, res) => {
         id: admin.id,
         name: admin.name,
         email: admin.email,
-      },
+        admin_level: admin.admin_level || "CITY",
+        state: admin.state,
+        district: admin.district,
+        city: admin.city,
+        block: admin.block
+      }
     });
 
   } catch (error) {
     console.error("Admin login:", error.message);
 
     res.status(500).json({
-      error: "Admin login failed",
+      error: "Admin login failed"
     });
   }
 });
 
-// ==========================================
-// ADMIN - GET ALL COMPLAINTS
-// ==========================================
+
+// ADMIN - GET ALL COMPLAINTS (Scoped to Admin Hierarchy Level)
 
 app.get("/api/admin/issues", verifyAdmin, async (req, res) => {
   try {
@@ -955,9 +780,11 @@ app.get("/api/admin/issues", verifyAdmin, async (req, res) => {
         i.department,
         i.photo_url,
         i.status,
-        i.location,
-        i.city,
         i.state,
+        i.district,
+        i.city,
+        i.block,
+        i.pincode,
         i.latitude,
         i.longitude,
         i.created_at,
@@ -975,14 +802,13 @@ app.get("/api/admin/issues", verifyAdmin, async (req, res) => {
     console.error("Admin get issues:", error.message);
 
     res.status(500).json({
-      error: "Failed to fetch complaints",
+      error: "Failed to fetch complaints"
     });
   }
 });
 
-// ==========================================
+
 // ADMIN - UPDATE COMPLAINT
-// ==========================================
 
 app.patch(
   "/api/admin/issues/:id",
@@ -993,14 +819,14 @@ app.patch(
     const validStatuses = [
       "Pending",
       "In Progress",
-      "Resolved",
+      "Resolved"
     ];
 
     const issueId = Number(req.params.id);
 
     if (!Number.isSafeInteger(issueId) || issueId <= 0) {
       return res.status(400).json({
-        error: "Invalid complaint ID",
+        error: "Invalid complaint ID"
       });
     }
 
@@ -1009,7 +835,7 @@ app.patch(
       department === undefined
     ) {
       return res.status(400).json({
-        error: "Provide status or department",
+        error: "Provide status or department"
       });
     }
 
@@ -1018,7 +844,7 @@ app.patch(
       !validStatuses.includes(status)
     ) {
       return res.status(400).json({
-        error: "Invalid complaint status",
+        error: "Invalid complaint status"
       });
     }
 
@@ -1027,7 +853,7 @@ app.patch(
       !AUTHORITIES.includes(department)
     ) {
       return res.status(400).json({
-        error: "Invalid department",
+        error: "Invalid department"
       });
     }
 
@@ -1055,34 +881,33 @@ app.patch(
         [
           status ?? null,
           department ?? null,
-          issueId,
+          issueId
         ]
       );
 
       if (result.rows.length === 0) {
         return res.status(404).json({
-          error: "Complaint not found",
+          error: "Complaint not found"
         });
       }
 
       res.json({
         message: "Complaint updated successfully",
-        issue: result.rows[0],
+        issue: result.rows[0]
       });
 
     } catch (error) {
       console.error("Update complaint:", error.message);
 
       res.status(500).json({
-        error: "Failed to update complaint",
+        error: "Failed to update complaint"
       });
     }
   }
 );
 
-// ==========================================
+
 // ADMIN - GET REGISTERED USERS
-// ==========================================
 
 app.get("/api/admin/users", verifyAdmin, async (req, res) => {
   try {
@@ -1113,7 +938,7 @@ app.get("/api/admin/users", verifyAdmin, async (req, res) => {
     console.error("Admin get users:", error.message);
 
     res.status(500).json({
-      error: "Failed to fetch users",
+      error: "Failed to fetch users"
     });
   }
 });
@@ -1145,14 +970,30 @@ app.use((error, _req, res, _next) => {
 
 async function initDatabase() {
   try {
-    // 1. Ensure admins table and geographic columns exist
+    // 1. Ensure users table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        gender VARCHAR(40) NOT NULL,
+        mobile VARCHAR(15) UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        state VARCHAR(100) DEFAULT 'Maharashtra',
+        city VARCHAR(100) DEFAULT 'Mumbai',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 2. Ensure admins table and geographic columns exist
     await pool.query(`
       CREATE TABLE IF NOT EXISTS admins (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        admin_level VARCHAR(30) NOT NULL DEFAULT 'CITY',
+        admin_level VARCHAR(30) NOT NULL DEFAULT 'CITY'
+          CHECK (admin_level IN ('NATIONAL', 'STATE', 'DISTRICT', 'CITY', 'BLOCK')),
         state VARCHAR(100),
         district VARCHAR(100),
         city VARCHAR(100),
@@ -1160,24 +1001,58 @@ async function initDatabase() {
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    // 3. Ensure issues table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS issues (
+        id SERIAL PRIMARY KEY,
+        tracking_id VARCHAR(20) UNIQUE NOT NULL,
+        title VARCHAR(200) NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        description TEXT NOT NULL,
+        department VARCHAR(120) NOT NULL DEFAULT 'Municipal Corporation',
+        photo_url TEXT,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        status VARCHAR(30) NOT NULL DEFAULT 'Pending'
+          CHECK (status IN ('Pending', 'In Progress', 'Resolved')),
+        latitude NUMERIC(10, 7),
+        longitude NUMERIC(10, 7),
+        state VARCHAR(100) DEFAULT 'Maharashtra',
+        district VARCHAR(100) DEFAULT 'Mumbai Suburban',
+        city VARCHAR(100) DEFAULT 'Mumbai',
+        block VARCHAR(100) DEFAULT 'Powai',
+        pincode VARCHAR(10),
+        resolved_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 4. Upgrade missing columns if tables already existed
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Maharashtra';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
 
       ALTER TABLE admins ADD COLUMN IF NOT EXISTS admin_level VARCHAR(30) DEFAULT 'CITY';
       ALTER TABLE admins ADD COLUMN IF NOT EXISTS state VARCHAR(100);
       ALTER TABLE admins ADD COLUMN IF NOT EXISTS district VARCHAR(100);
       ALTER TABLE admins ADD COLUMN IF NOT EXISTS city VARCHAR(100);
       ALTER TABLE admins ADD COLUMN IF NOT EXISTS block VARCHAR(100);
+      ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
 
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS title VARCHAR(200);
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS category VARCHAR(100);
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS photo_url TEXT;
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Maharashtra';
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS district VARCHAR(100) DEFAULT 'Mumbai Suburban';
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS block VARCHAR(100) DEFAULT 'Powai';
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS pincode VARCHAR(10);
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
-      ALTER TABLE issues ADD COLUMN IF NOT EXISTS photo_url TEXT;
-      ALTER TABLE issues ADD COLUMN IF NOT EXISTS user_id INTEGER;
     `);
 
-    // 2. Ensure default demo admin accounts exist with known password
+    // 5. Ensure default demo admin accounts exist with known password
     const defaultPassword = process.env.ADMIN_PASSWORD || "Admin@12345678";
     const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
@@ -1207,7 +1082,20 @@ async function initDatabase() {
       }
     }
 
-    console.log("✓ Admin accounts and tables verified");
+    // 6. Seed demo issues if table is empty
+    const checkIssues = await pool.query("SELECT COUNT(*)::int AS count FROM issues");
+    if (checkIssues.rows[0].count === 0) {
+      await pool.query(`
+        INSERT INTO issues (tracking_id, title, category, description, department, status, latitude, longitude, state, district, city, block)
+        VALUES
+        ('CW-DEMO01', 'Pothole near main road', 'Road', 'Pothole reported near the main road', 'Public Works Department (PWD)', 'Pending', 19.0760000, 72.8777000, 'Maharashtra', 'Mumbai Suburban', 'Mumbai', 'Powai'),
+        ('CW-DEMO02', 'Garbage collection delayed', 'Garbage', 'Garbage collection is delayed in the residential lane', 'Sanitation and Waste Management', 'In Progress', 19.0900000, 72.8650000, 'Maharashtra', 'Mumbai Suburban', 'Mumbai', 'Powai'),
+        ('CW-DEMO03', 'Streetlight not working', 'Streetlight', 'Streetlight fixture blinking and off for 3 days', 'Street Lighting Department', 'Resolved', 19.1170000, 72.9050000, 'Maharashtra', 'Mumbai Suburban', 'Mumbai', 'Powai')
+        ON CONFLICT (tracking_id) DO NOTHING;
+      `);
+    }
+
+    console.log("✓ Database tables and demo accounts verified");
 
   } catch (err) {
     console.error("Database initialization notice:", err.message);
@@ -1233,10 +1121,14 @@ async function startServer() {
     });
 
   } catch (error) {
-    console.error(
-      "Could not connect to PostgreSQL:",
-      error.message
-    );
+    const errorMsg =
+      error.message ||
+      (error.errors && error.errors.map((e) => e.message || e.code).join(", ")) ||
+      error.code ||
+      String(error);
+
+    console.error("Could not connect to PostgreSQL:", errorMsg);
+    console.error("Check that PostgreSQL is running on port 5432 and credentials in backend/.env are valid.");
 
     process.exit(1);
   }
