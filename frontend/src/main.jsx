@@ -14,6 +14,7 @@ import "leaflet/dist/leaflet.css";
 import "./styles.css";
 
 import AdminDashboard from "./AdminDashboard";
+import UserDashboard from "./UserDashboard";
 
 const API = "http://localhost:5001/api";
 
@@ -466,7 +467,7 @@ function App() {
       const account = response.data.user;
       localStorage.setItem(SESSION_KEY, JSON.stringify(account));
       setUser(account);
-      go("home");
+      go("user-dashboard");
     } catch (error) {
       setAuthMsg({
         type: "error",
@@ -497,7 +498,7 @@ function App() {
       const account = response.data.user;
       localStorage.setItem(SESSION_KEY, JSON.stringify(account));
       setUser(account);
-      go("home");
+      go("user-dashboard");
     } catch (error) {
       setAuthMsg({
         type: "error",
@@ -651,7 +652,7 @@ function App() {
                 }}
                 title={t("citizenDashboard")}
               >
-                📋 {t("myReports")}{userReports.length > 0 ? ` (${userReports.length})` : ""}
+                👤 {t("citizenDashboard")}
               </button>
               <span className="hello">
                 {t("hello")} {user.name.split(" ")[0]}
@@ -695,6 +696,21 @@ function App() {
 
   if (page === "admin") {
     return <AdminDashboard onLogout={() => go("home")} />;
+  }
+
+  if (page === "user-dashboard") {
+    if (!user) {
+      go("login");
+      return null;
+    }
+    return (
+      <UserDashboard
+        user={user}
+        onLogout={logout}
+        onNavigate={(target) => go(target)}
+        onUserUpdate={(updatedUser) => setUser(updatedUser)}
+      />
+    );
   }
   return (
     <>
@@ -1037,130 +1053,6 @@ function App() {
                     </p>
                   </>
                 )}
-              </div>
-            )}
-          </section>
-        )}
-        {/* CITIZEN DASHBOARD (MY REPORTS) */}
-        {page === "user-dashboard" && (
-          <section className="user-dashboard-section">
-            <div className="user-dash-header">
-              <div className="user-dash-title">
-                <h2>👤 {user ? user.name : "Citizen"}'s {t("citizenDashboard")}</h2>
-                <p>{t("citizenDashboardSubtitle")}</p>
-              </div>
-              <button className="primary" onClick={() => go("report")}>
-                + {t("reportNewComplaint")}
-              </button>
-            </div>
-
-            <div className="user-dash-stats">
-              <div className="user-dash-stat-card">
-                <b>{userReports.length}</b>
-                <span>{t("totalReports")}</span>
-              </div>
-              <div className="user-dash-stat-card">
-                <b style={{ color: "#d97706" }}>
-                  {userReports.filter((r) => String(r.status).toLowerCase() === "pending").length}
-                </b>
-                <span>{t("pending")}</span>
-              </div>
-              <div className="user-dash-stat-card">
-                <b style={{ color: "#2563eb" }}>
-                  {userReports.filter((r) => String(r.status).toLowerCase() === "in progress").length}
-                </b>
-                <span>{t("inProgress")}</span>
-              </div>
-              <div className="user-dash-stat-card">
-                <b style={{ color: "#16a34a" }}>
-                  {userReports.filter((r) => String(r.status).toLowerCase() === "resolved").length}
-                </b>
-                <span>{t("resolved")}</span>
-              </div>
-            </div>
-
-            {!user ? (
-              <div className="empty" style={{ background: "white", borderRadius: "12px", textAlign: "center", padding: "40px 20px" }}>
-                <p style={{ fontSize: "16px", color: "#64748b" }}>Please log in to view your citizen dashboard and submitted reports.</p>
-                <button className="primary" onClick={() => go("login")} style={{ marginTop: "12px" }}>
-                  {t("login")}
-                </button>
-              </div>
-            ) : userReports.length === 0 ? (
-              <div className="empty" style={{ background: "white", borderRadius: "12px", textAlign: "center", padding: "40px 20px" }}>
-                <p style={{ fontSize: "16px", color: "#64748b" }}>{t("noMyReports")}</p>
-                <button className="primary" onClick={() => go("report")} style={{ marginTop: "12px" }}>
-                  {t("reportNewComplaint")}
-                </button>
-              </div>
-            ) : (
-              <div className="user-reports-list">
-                {userReports.map((report) => (
-                  <article className="user-report-card" key={report.id}>
-                    <div className="user-report-top">
-                      <div className="user-report-meta">
-                        <span className="category-pill" style={{ background: "#f1f5f9", padding: "4px 10px", borderRadius: "6px", fontWeight: "700", fontSize: "12px", color: "#334155" }}>
-                          {report.category || "Issue"}
-                        </span>
-                        <span className={"status " + statusClass(report.status)}>
-                          {translateStatus(report.status, language)}
-                        </span>
-                        {report.is_anonymous ? (
-                          <span className="anon-badge" title="Your identity is protected from public and government admins">
-                            🛡️ {t("anonymousBadge")}
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "500" }}>
-                            ✓ {t("registeredBadge")}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ fontFamily: "monospace", fontWeight: "700", color: "#0b3d2e", background: "#f0fdf4", padding: "3px 8px", borderRadius: "4px", fontSize: "13px" }}>
-                          {report.tracking_id}
-                        </span>
-                        <button
-                          onClick={() => {
-                            setTrackId(report.tracking_id);
-                            go("track");
-                          }}
-                          style={{ padding: "4px 9px", fontSize: "12px" }}
-                        >
-                          {t("trackButton")} →
-                        </button>
-                      </div>
-                    </div>
-
-                    <h3 style={{ margin: "4px 0", fontSize: "18px", color: "#0f172a" }}>
-                      {report.title}
-                    </h3>
-                    <p style={{ margin: "0", color: "#475569", lineHeight: "1.5", fontSize: "14px" }}>
-                      {report.description}
-                    </p>
-
-                    {report.photo_url && (
-                      <div style={{ marginTop: "6px" }}>
-                        <img
-                          src={report.photo_url.startsWith("http") ? report.photo_url : `http://localhost:5001${report.photo_url}`}
-                          alt="Complaint evidence"
-                          style={{ maxHeight: "140px", borderRadius: "8px", objectFit: "cover", border: "1px solid #e2e8f0" }}
-                        />
-                      </div>
-                    )}
-
-                    <div className="user-report-bottom">
-                      <div>
-                        🏢 <b>{t("department")}:</b> {report.department}
-                      </div>
-                      <div>
-                        📍 <b>{t("locationLabel")}:</b> {[report.block, report.city, report.state].filter(Boolean).join(", ")} {report.pincode ? `(${report.pincode})` : ""}
-                      </div>
-                      <div>
-                        📅 <b>{t("dateSubmitted")}:</b> {report.created_at ? new Date(report.created_at).toLocaleDateString() : "Recently"}
-                      </div>
-                    </div>
-                  </article>
-                ))}
               </div>
             )}
           </section>
