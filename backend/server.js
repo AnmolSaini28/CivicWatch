@@ -93,7 +93,7 @@ const uploadPhoto = multer({
 });
 
 // ==========================================
-// TRACKING ID GENERATOR
+// TRACKING ID GENERATOR & 10KM BROADCAST HELPER
 // ==========================================
 
 function makeTrackingId() {
@@ -101,6 +101,59 @@ function makeTrackingId() {
     "CW-" +
     Math.random().toString(36).substring(2, 8).toUpperCase()
   );
+}
+
+// Haversine formula to compute distance between two GPS coordinates in kilometers
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth's mean radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Broadcast alerts to all registered citizens residing within a 10km radius
+async function sendNearbyAlerts(issue) {
+  try {
+    const issueLat = Number(issue.latitude);
+    const issueLng = Number(issue.longitude);
+    if (!Number.isFinite(issueLat) || !Number.isFinite(issueLng)) return;
+
+    // Fetch registered citizens with established geographic coordinates
+    const usersResult = await pool.query(
+      `SELECT id, name, latitude, longitude FROM users 
+       WHERE latitude IS NOT NULL AND longitude IS NOT NULL`
+    );
+
+    for (const u of usersResult.rows) {
+      const uLat = Number(u.latitude);
+      const uLng = Number(u.longitude);
+      if (!Number.isFinite(uLat) || !Number.isFinite(uLng)) continue;
+
+      const dist = getDistanceKm(issueLat, issueLng, uLat, uLng);
+      // Alert triggered if within 10 km
+      if (dist <= 10.0) {
+        const distKm = Math.round(dist * 100) / 100;
+        const distText = dist < 0.1 ? "nearby" : `${dist.toFixed(1)} km away`;
+        const title = `🚨 New ${issue.category || "Civic"} Report (${distText})`;
+        const message = issue.title || "New civic problem reported in your neighborhood";
+
+        await pool.query(
+          `INSERT INTO notifications (user_id, issue_id, title, message, distance_km)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [u.id, issue.id, title, message, distKm]
+        );
+      }
+    }
+  } catch (err) {
+    console.error("sendNearbyAlerts notice:", err.message);
+  }
 }
 
 
@@ -533,7 +586,14 @@ app.post(
         ]
       );
 
-      res.status(201).json(result.rows[0]);
+      const createdIssue = result.rows[0];
+
+      // Part 1: Broadcast alert to registered citizens within 10km radius
+      sendNearbyAlerts(createdIssue).catch((broadcastErr) => {
+        console.error("10km alert broadcast notice:", broadcastErr.message);
+      });
+
+      res.status(201).json(createdIssue);
 
     } catch (error) {
       if (req.file) {
@@ -585,13 +645,15 @@ app.post("/api/auth/signup", async (req, res) => {
 
     const state = (req.body.state || "Maharashtra").trim();
     const city = (req.body.city || "Mumbai").trim();
+    const latitude = req.body.latitude ? Number(req.body.latitude) : 19.0760000;
+    const longitude = req.body.longitude ? Number(req.body.longitude) : 72.8777000;
 
     const result = await pool.query(
       `
       INSERT INTO users
-      (name, email, gender, mobile, password_hash, state, city)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, name, email, gender, mobile, state, city
+      (name, email, gender, mobile, password_hash, state, city, latitude, longitude)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, name, email, gender, mobile, state, city, latitude, longitude
       `,
       [
         name.trim(),
@@ -601,6 +663,8 @@ app.post("/api/auth/signup", async (req, res) => {
         passwordHash,
         state,
         city,
+        latitude,
+        longitude,
       ]
     );
 
@@ -647,6 +711,8 @@ app.post("/api/auth/login", async (req, res) => {
         mobile,
         state,
         city,
+        latitude,
+        longitude,
         password_hash
       FROM users
       WHERE email = $1
@@ -899,11 +965,14 @@ app.put("/api/user/profile/:userId", async (req, res) => {
     return res.status(400).json({ error: "Invalid user ID" });
   }
 
-  const { name, mobile, gender, city, state } = req.body;
+  const { name, mobile, gender, city, state, latitude, longitude } = req.body;
 
   if (!name || !name.trim()) {
     return res.status(400).json({ error: "Name is required" });
   }
+
+  const lat = latitude !== undefined && latitude !== null && latitude !== "" ? Number(latitude) : null;
+  const lng = longitude !== undefined && longitude !== null && longitude !== "" ? Number(longitude) : null;
 
   try {
     const result = await pool.query(
@@ -912,15 +981,19 @@ app.put("/api/user/profile/:userId", async (req, res) => {
            mobile = COALESCE($2, mobile),
            gender = COALESCE($3, gender),
            city = COALESCE($4, city),
-           state = COALESCE($5, state)
-       WHERE id = $6
-       RETURNING id, name, email, gender, mobile, state, city`,
+           state = COALESCE($5, state),
+           latitude = COALESCE($6, latitude),
+           longitude = COALESCE($7, longitude)
+       WHERE id = $8
+       RETURNING id, name, email, gender, mobile, state, city, latitude, longitude`,
       [
         name.trim(),
         mobile ? mobile.trim() : null,
         gender || null,
         city ? city.trim() : null,
         state ? state.trim() : null,
+        lat,
+        lng,
         userId
       ]
     );
@@ -936,6 +1009,119 @@ app.put("/api/user/profile/:userId", async (req, res) => {
   } catch (error) {
     console.error("Update profile:", error.message);
     res.status(500).json({ error: "Failed to update profile" });
+  }
+});
+
+// ==========================================
+// PART 1: NOTIFICATION ENDPOINTS
+// ==========================================
+
+// GET user notifications
+app.get("/api/notifications/:userId", async (req, res) => {
+  const userId = parseInt(req.params.userId, 10);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ error: "Invalid user ID" });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT
+        n.id,
+        n.user_id,
+        n.issue_id,
+        n.title,
+        n.message,
+        n.distance_km,
+        n.is_read,
+        n.created_at,
+        i.tracking_id,
+        i.category,
+        i.status,
+        i.department,
+        i.city,
+        i.block,
+        i.latitude as issue_lat,
+        i.longitude as issue_lng
+      FROM notifications n
+      LEFT JOIN issues i ON n.issue_id = i.id
+      WHERE n.user_id = $1
+      ORDER BY n.created_at DESC, n.id DESC
+      LIMIT 50`,
+      [userId]
+    );
+
+    const unreadCount = result.rows.filter((n) => !n.is_read).length;
+
+    res.json({
+      notifications: result.rows,
+      unreadCount,
+    });
+  } catch (error) {
+    console.error("Fetch notifications error:", error.message);
+    res.status(500).json({ error: "Failed to fetch notifications" });
+  }
+});
+
+// PUT mark single notification as read
+app.put("/api/notifications/:id/read", async (req, res) => {
+  const notifId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(notifId) || notifId <= 0) {
+    return res.status(400).json({ error: "Invalid notification ID" });
+  }
+
+  try {
+    await pool.query("UPDATE notifications SET is_read = TRUE WHERE id = $1", [notifId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Mark notification read error:", error.message);
+    res.status(500).json({ error: "Failed to mark notification read" });
+  }
+});
+
+// PUT mark all user notifications as read
+app.put("/api/notifications/user/:userId/read-all", async (req, res) => {
+  const userId = parseInt(req.params.userId, 10);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ error: "Invalid user ID" });
+  }
+
+  try {
+    await pool.query("UPDATE notifications SET is_read = TRUE WHERE user_id = $1", [userId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Mark all read error:", error.message);
+    res.status(500).json({ error: "Failed to mark all notifications read" });
+  }
+});
+
+// PUT update user location coordinates
+app.put("/api/user/location/:userId", async (req, res) => {
+  const userId = parseInt(req.params.userId, 10);
+  const { latitude, longitude } = req.body;
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+
+  if (!Number.isInteger(userId) || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return res.status(400).json({ error: "Valid user ID, latitude, and longitude are required" });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE users
+       SET latitude = $1, longitude = $2
+       WHERE id = $3
+       RETURNING id, name, email, latitude, longitude`,
+      [lat, lng, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ success: true, user: result.rows[0] });
+  } catch (error) {
+    console.error("Update user location error:", error.message);
+    res.status(500).json({ error: "Failed to update user location" });
   }
 });
 
@@ -1241,6 +1427,8 @@ async function initDatabase() {
     await pool.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Maharashtra';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS latitude NUMERIC(10, 7) DEFAULT 19.0760000;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS longitude NUMERIC(10, 7) DEFAULT 72.8777000;
 
       ALTER TABLE admins ADD COLUMN IF NOT EXISTS admin_level VARCHAR(30) DEFAULT 'CITY';
       ALTER TABLE admins ADD COLUMN IF NOT EXISTS state VARCHAR(100);
@@ -1260,6 +1448,25 @@ async function initDatabase() {
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS block VARCHAR(100) DEFAULT 'Powai';
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS pincode VARCHAR(10);
       ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
+    `);
+
+    // 4b. Ensure notifications table exists (Part 1: 10km Nearby Citizen Alerts)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+        title VARCHAR(200) NOT NULL,
+        message TEXT,
+        distance_km NUMERIC(5, 2) NOT NULL,
+        is_read BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_notifications_user_unread 
+        ON notifications(user_id, is_read);
+      CREATE INDEX IF NOT EXISTS idx_notifications_issue 
+        ON notifications(issue_id);
     `);
 
     // 5. Ensure default demo admin accounts exist with known password
