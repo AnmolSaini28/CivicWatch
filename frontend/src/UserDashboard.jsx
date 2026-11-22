@@ -303,8 +303,54 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
     }
   };
 
+  // Part 1: Notifications & 10km Nearby Citizen Alerts state
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
+
+  const loadNotifications = async () => {
+    if (!currentUser?.id) return;
+    setLoadingNotifs(true);
+    try {
+      const res = await axios.get(`${API}/notifications/${currentUser.id}`);
+      setNotifications(res.data.notifications || []);
+      setUnreadCount(res.data.unreadCount || 0);
+    } catch (err) {
+      console.error("Notifications fetch error:", err);
+    } finally {
+      setLoadingNotifs(false);
+    }
+  };
+
+  const markNotificationRead = async (notifId) => {
+    try {
+      await axios.put(`${API}/notifications/${notifId}/read`);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notifId ? { ...n, is_read: true } : n))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error("Mark notification read error:", err);
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    if (!currentUser?.id) return;
+    try {
+      await axios.put(`${API}/notifications/user/${currentUser.id}/read-all`);
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error("Mark all notifications read error:", err);
+    }
+  };
+
   useEffect(() => {
     loadUserIssues();
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 15000);
+    return () => clearInterval(interval);
   }, [currentUser?.id]);
 
   // Sync photo preview
@@ -701,12 +747,181 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               className="cw-refresh"
               onClick={() => {
                 loadUserIssues();
+                loadNotifications();
                 setSuccess("Data refreshed.");
               }}
               disabled={loading}
             >
               ↻ Refresh
             </button>
+
+            {/* Part 1: Notification Bell & Nearby Alerts Dropdown */}
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => setNotifDropdownOpen((prev) => !prev)}
+                style={{
+                  position: "relative",
+                  padding: "7px 12px",
+                  borderRadius: "8px",
+                  background: notifDropdownOpen ? "#082f26" : "#ffffff",
+                  color: notifDropdownOpen ? "#ffffff" : "#1e293b",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                  transition: "all 0.15s ease",
+                }}
+                title="10km Radius Nearby Civic Alerts"
+              >
+                <span style={{ fontSize: "16px" }}>🔔</span>
+                <span style={{ fontSize: "12px", display: "inline-block" }}>Alerts</span>
+                {unreadCount > 0 && (
+                  <span
+                    style={{
+                      background: "#ef4444",
+                      color: "white",
+                      borderRadius: "999px",
+                      padding: "1px 6px",
+                      fontSize: "11px",
+                      fontWeight: "800",
+                      lineHeight: "14px",
+                      boxShadow: "0 1px 2px rgba(239, 68, 68, 0.4)",
+                    }}
+                  >
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {notifDropdownOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "calc(100% + 8px)",
+                    width: "360px",
+                    maxWidth: "90vw",
+                    background: "white",
+                    borderRadius: "12px",
+                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+                    border: "1px solid #cbd5e1",
+                    zIndex: 1000,
+                    overflow: "hidden",
+                    textAlign: "left",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "12px 16px",
+                      background: "#082f26",
+                      color: "white",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ fontSize: "15px" }}>🚨</span>
+                      <span style={{ fontSize: "13px", fontWeight: "700" }}>
+                        Nearby Alerts (&le; 10km)
+                      </span>
+                      {unreadCount > 0 && (
+                        <span
+                          style={{
+                            background: "#f59e0b",
+                            color: "#082f26",
+                            fontSize: "10px",
+                            fontWeight: "800",
+                            padding: "1px 6px",
+                            borderRadius: "999px",
+                          }}
+                        >
+                          {unreadCount} New
+                        </span>
+                      )}
+                    </div>
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={markAllNotificationsRead}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "#a7f3d0",
+                          fontSize: "11px",
+                          fontWeight: "600",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          padding: "0",
+                        }}
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ maxHeight: "320px", overflowY: "auto" }}>
+                    {notifications.length === 0 ? (
+                      <div style={{ padding: "28px 16px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+                        <div style={{ fontSize: "28px", marginBottom: "6px" }}>📡</div>
+                        No civic alerts reported within 10 km yet.
+                      </div>
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          onClick={() => {
+                            if (!n.is_read) markNotificationRead(n.id);
+                          }}
+                          style={{
+                            padding: "12px 14px",
+                            borderBottom: "1px solid #f1f5f9",
+                            background: n.is_read ? "white" : "#f0fdf4",
+                            cursor: "pointer",
+                            transition: "background 0.15s ease",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "4px",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span
+                              style={{
+                                fontSize: "10px",
+                                fontWeight: "800",
+                                textTransform: "uppercase",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                background: n.is_read ? "#e2e8f0" : "#dcfce7",
+                                color: n.is_read ? "#475569" : "#166534",
+                              }}
+                            >
+                              {n.category || "Issue"} • 📍 {n.distance_km} km away
+                            </span>
+                            <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+                              {new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: "12px", fontWeight: n.is_read ? "500" : "700", color: "#1e293b" }}>
+                            {n.title}
+                          </div>
+                          {n.message && (
+                            <div style={{ fontSize: "11px", color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {n.message}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <span className="cw-header-user">
               👤 {currentUser?.name ? currentUser.name.split(" ")[0] : "Citizen"}
@@ -804,6 +1019,186 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               >
                 <span>✎</span> File a Complaint Now
               </button>
+            </div>
+
+            {/* Part 1: Nearby Alerts Widget (<10km) */}
+            <div
+              className="cw-card"
+              style={{
+                background: "white",
+                borderRadius: "10px",
+                border: "1px solid #e2e8e5",
+                padding: "18px",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "14px",
+                  flexWrap: "wrap",
+                  gap: "10px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "8px",
+                      background: "#ecfdf5",
+                      border: "1px solid #a7f3d0",
+                      color: "#065f46",
+                      display: "grid",
+                      placeItems: "center",
+                      fontSize: "18px",
+                    }}
+                  >
+                    📡
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: "15px", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
+                      Nearby Citizen Alerts (Within 10 km Radius)
+                      {unreadCount > 0 && (
+                        <span
+                          style={{
+                            background: "#ef4444",
+                            color: "white",
+                            fontSize: "10px",
+                            fontWeight: "800",
+                            padding: "2px 8px",
+                            borderRadius: "999px",
+                          }}
+                        >
+                          {unreadCount} NEW
+                        </span>
+                      )}
+                    </h3>
+                    <span style={{ fontSize: "12px", color: "#64748b" }}>
+                      Real-time alerts broadcast to registered citizens living within 10 km
+                    </span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={markAllNotificationsRead}
+                      style={{
+                        background: "#f1f5f9",
+                        border: "1px solid #cbd5e1",
+                        color: "#334155",
+                        borderRadius: "6px",
+                        padding: "5px 10px",
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ✓ Mark All Read
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={loadNotifications}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "#0b3d2e",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                    }}
+                  >
+                    ↻ Refresh Alerts
+                  </button>
+                </div>
+              </div>
+
+              {notifications.length === 0 ? (
+                <div
+                  style={{
+                    padding: "24px",
+                    textAlign: "center",
+                    background: "#f8fafc",
+                    borderRadius: "8px",
+                    border: "1px dashed #cbd5e1",
+                    color: "#64748b",
+                    fontSize: "13px",
+                  }}
+                >
+                  <div style={{ fontSize: "24px", marginBottom: "4px" }}>✅</div>
+                  No active civic alerts reported within 10 km of your registered area. All clear!
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                    gap: "12px",
+                  }}
+                >
+                  {notifications.slice(0, 6).map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={() => {
+                        if (!n.is_read) markNotificationRead(n.id);
+                      }}
+                      style={{
+                        background: n.is_read ? "#ffffff" : "#f0fdf4",
+                        border: n.is_read ? "1px solid #e2e8e5" : "1px solid #86efac",
+                        borderRadius: "8px",
+                        padding: "12px 14px",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        boxShadow: n.is_read ? "none" : "0 2px 6px rgba(34, 197, 94, 0.08)",
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                          <span
+                            style={{
+                              fontSize: "10px",
+                              fontWeight: "800",
+                              textTransform: "uppercase",
+                              padding: "2px 7px",
+                              borderRadius: "4px",
+                              background: n.is_read ? "#e2e8f0" : "#dcfce7",
+                              color: n.is_read ? "#475569" : "#166534",
+                            }}
+                          >
+                            {n.category || "Civic"} • 📍 {n.distance_km} km away
+                          </span>
+                          <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+                            {new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a", marginBottom: "4px" }}>
+                          {n.title}
+                        </div>
+                        {n.message && (
+                          <p style={{ margin: 0, fontSize: "12px", color: "#475569", lineHeight: "1.4" }}>
+                            {n.message}
+                          </p>
+                        )}
+                      </div>
+                      <div style={{ marginTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "8px", borderTop: "1px solid #f1f5f9" }}>
+                        <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>
+                          {n.tracking_id || "CW-ALERT"}
+                        </span>
+                        <span style={{ fontSize: "11px", fontWeight: "700", color: "#0b3d2e" }}>
+                          {n.is_read ? "✓ Viewed" : "● Tap to read"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Recent Reports Table & Info Cards */}
@@ -1722,6 +2117,62 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 >
                   {profileSaving ? "Saving..." : "Save Profile Details"}
                 </button>
+
+                {/* Part 1: Geolocation Coordinates & Detection */}
+                <div style={{ marginTop: "12px", padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                    <div>
+                      <span style={{ fontSize: "11px", fontWeight: "700", color: "#334155", textTransform: "uppercase" }}>
+                        📍 Registered GPS Coordinates (10km Radius Base)
+                      </span>
+                      <div style={{ fontSize: "12px", color: "#0f172a", marginTop: "2px", fontFamily: "monospace" }}>
+                        Lat: {currentUser?.latitude || "19.0760"}, Lng: {currentUser?.longitude || "72.8777"}
+                      </div>
+                      <span style={{ fontSize: "10px", color: "#64748b" }}>
+                        Used to calculate 10 km distance when local complaints are broadcast
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if ("geolocation" in navigator) {
+                          navigator.geolocation.getCurrentPosition(
+                            async (pos) => {
+                              const lat = pos.coords.latitude;
+                              const lng = pos.coords.longitude;
+                              try {
+                                const res = await axios.put(`${API}/user/location/${currentUser.id}`, { latitude: lat, longitude: lng });
+                                setCurrentUser(res.data.user);
+                                localStorage.setItem("cw_session", JSON.stringify(res.data.user));
+                                setSuccess("Base location updated to your GPS coordinates!");
+                              } catch {
+                                setError("Could not update coordinates on server.");
+                              }
+                            },
+                            () => setError("Location permission denied or unavailable.")
+                          );
+                        } else {
+                          setError("Geolocation is not supported by your browser.");
+                        }
+                      }}
+                      style={{
+                        background: "#082f26",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        padding: "7px 12px",
+                        fontSize: "11px",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <span>📍</span> Detect Current GPS
+                    </button>
+                  </div>
+                </div>
               </form>
             </div>
 

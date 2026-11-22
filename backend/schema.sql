@@ -1,5 +1,9 @@
--- CivicWatch PostgreSQL Database Schema
+-- CivicWatch Unified PostgreSQL Database Schema
+-- All tables and migrations consolidated in 1 file with strict foreign-key dependency order
 
+-- ==============================================================================
+-- 1. USERS TABLE (Citizen Accounts)
+-- ==============================================================================
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
@@ -9,9 +13,25 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   state VARCHAR(100) DEFAULT 'Maharashtra',
   city VARCHAR(100) DEFAULT 'Mumbai',
+  latitude NUMERIC(10, 7) DEFAULT 19.0760000,
+  longitude NUMERIC(10, 7) DEFAULT 72.8777000,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Upgrade existing columns if users table was created earlier
+ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Maharashtra';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS latitude NUMERIC(10, 7) DEFAULT 19.0760000;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS longitude NUMERIC(10, 7) DEFAULT 72.8777000;
+
+-- Backfill default coordinates if null
+UPDATE users 
+SET latitude = 19.0760000, longitude = 72.8777000 
+WHERE latitude IS NULL OR longitude IS NULL;
+
+-- ==============================================================================
+-- 2. ADMINS TABLE (Municipal Authority Accounts)
+-- ==============================================================================
 CREATE TABLE IF NOT EXISTS admins (
   id SERIAL PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
@@ -27,6 +47,18 @@ CREATE TABLE IF NOT EXISTS admins (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Upgrade existing admin columns if needed
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS admin_level VARCHAR(30) DEFAULT 'CITY';
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS district VARCHAR(100);
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS block VARCHAR(100);
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+
+-- ==============================================================================
+-- 3. ISSUES TABLE (Citizen Complaints & Civic Reports)
+-- Depends on: users (user_id)
+-- ==============================================================================
 CREATE TABLE IF NOT EXISTS issues (
   id SERIAL PRIMARY KEY,
   tracking_id VARCHAR(20) UNIQUE NOT NULL,
@@ -50,30 +82,44 @@ CREATE TABLE IF NOT EXISTS issues (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Upgrade existing columns if tables already existed
-ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Maharashtra';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
-
-ALTER TABLE admins ADD COLUMN IF NOT EXISTS admin_level VARCHAR(30) DEFAULT 'CITY';
-ALTER TABLE admins ADD COLUMN IF NOT EXISTS state VARCHAR(100);
-ALTER TABLE admins ADD COLUMN IF NOT EXISTS district VARCHAR(100);
-ALTER TABLE admins ADD COLUMN IF NOT EXISTS city VARCHAR(100);
-ALTER TABLE admins ADD COLUMN IF NOT EXISTS block VARCHAR(100);
-ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
-
+-- Upgrade existing issues columns if needed
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS title VARCHAR(200);
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS category VARCHAR(100);
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS photo_url TEXT;
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS is_anonymous BOOLEAN DEFAULT FALSE;
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS state VARCHAR(100) DEFAULT 'Maharashtra';
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS district VARCHAR(100) DEFAULT 'Mumbai Suburban';
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Mumbai';
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS block VARCHAR(100) DEFAULT 'Powai';
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS pincode VARCHAR(10);
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
-ALTER TABLE issues ADD COLUMN IF NOT EXISTS is_anonymous BOOLEAN DEFAULT FALSE;
 
--- Demo issues for testing
+-- ==============================================================================
+-- 4. NOTIFICATIONS TABLE (Part 1: 10km Nearby Citizen Alerts)
+-- Depends on: users (user_id) AND issues (issue_id)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS notifications (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  title VARCHAR(200) NOT NULL,
+  message TEXT,
+  distance_km NUMERIC(5, 2) NOT NULL,
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index for fast user unread notification retrieval
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread 
+  ON notifications(user_id, is_read);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_issue 
+  ON notifications(issue_id);
+
+-- ==============================================================================
+-- 5. DEMO SEED DATA (Demo Issues)
+-- ==============================================================================
 INSERT INTO issues (tracking_id, title, category, description, department, status, latitude, longitude, state, district, city, block)
 VALUES
 ('CW-DEMO01', 'Pothole near main road', 'Road', 'Pothole reported near the main road', 'Public Works Department (PWD)', 'Pending', 19.0760000, 72.8777000, 'Maharashtra', 'Mumbai Suburban', 'Mumbai', 'Powai'),
