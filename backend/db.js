@@ -1,5 +1,6 @@
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 const { Pool } = require("pg");
-require("dotenv").config();
 
 // Pool manages PostgreSQL connections for us.
 const pool = new Pool({
@@ -7,3 +8,4 @@ const pool = new Pool({
 });
 
 module.exports = pool;
+
