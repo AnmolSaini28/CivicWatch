@@ -265,22 +265,66 @@ function translateStatus(status, language) {
 }
 
 function App() {
-  const [page, setPage] = useState("home");
+  const getInitialPage = () => {
+    const hash = window.location.hash.replace(/^#/, "");
+    const [pagePart] = hash.split("?");
+    const valid = ["home", "report", "map", "track", "login", "signup", "user-dashboard", "admin"];
+    return valid.includes(pagePart) ? pagePart : "home";
+  };
+
+  const [page, setPage] = useState(getInitialPage);
   const [language, setLanguage] = useState(() => localStorage.getItem("cw_language") === "hi" ? "hi" : "en");
   const t = (key) => translations[language]?.[key] ?? translations.en[key] ?? key;
   useEffect(() => {
     localStorage.setItem("cw_language", language);
   }, [language]);
 
+  // Set up browser history stack & back navigation support
   useEffect(() => {
-    const checkHash = () => {
-      if (window.location.hash === "#admin") {
-        setPage("admin");
+    const initialPage = getInitialPage();
+    // Safety check: ensure history has a root anchor so back from home doesn't close website
+    if (!window.history.state) {
+      window.history.replaceState({ page: "root-anchor" }, "", window.location.hash || "#home");
+      window.history.pushState({ page: initialPage }, "", window.location.hash || `#${initialPage}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      setAuthMsg({ type: "", text: "" });
+      if (event.state) {
+        if (event.state.page === "root-anchor") {
+          // Trap root-anchor so browser back doesn't close website
+          setPage("home");
+          window.history.pushState({ page: "home" }, "", "#home");
+          return;
+        }
+        if (event.state.page) {
+          setPage(event.state.page);
+          return;
+        }
+      }
+      const hash = window.location.hash.replace(/^#/, "");
+      const [pagePart] = hash.split("?");
+      const valid = ["home", "report", "map", "track", "login", "signup", "user-dashboard", "admin"];
+      setPage(valid.includes(pagePart) ? pagePart : "home");
+    };
+
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace(/^#/, "");
+      const [pagePart] = hash.split("?");
+      const valid = ["home", "report", "map", "track", "login", "signup", "user-dashboard", "admin"];
+      if (valid.includes(pagePart)) {
+        setPage(pagePart);
       }
     };
-    checkHash();
-    window.addEventListener("hashchange", checkHash);
-    return () => window.removeEventListener("hashchange", checkHash);
+
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("hashchange", handleHashChange);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("hashchange", handleHashChange);
+    };
   }, []);
   const [issues, setIssues] = useState([]);
   const [dash, setDash] = useState(null);
@@ -356,6 +400,12 @@ function App() {
     }
   }, [user, loadUserReports]);
 
+  useEffect(() => {
+    if (user && (page === "login" || page === "signup")) {
+      go("user-dashboard");
+    }
+  }, [user, page]);
+
   // Keep only issues with valid geographic coordinates.
 
   const mapIssues = useMemo(
@@ -408,10 +458,15 @@ function App() {
 
   // Authentication requests are sent to the Node/Express backend.
 
-  function go(nextPage) {
+  function go(nextPage, pushHistory = true) {
     setAuthMsg({ type: "", text: "" });
     setPage(nextPage);
     window.scrollTo(0, 0);
+    if (pushHistory) {
+      if (!window.history.state || window.history.state.page !== nextPage) {
+        window.history.pushState({ page: nextPage }, "", `#${nextPage}`);
+      }
+    }
   }
   async function signup(event) {
     event.preventDefault();
@@ -637,40 +692,23 @@ function App() {
         <div className="auth">
           {user ? (
             <>
-              <button
+              <span
+                className="hello"
                 onClick={() => go("user-dashboard")}
-                className={page === "user-dashboard" ? "active" : ""}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontWeight: "600",
-                  background: page === "user-dashboard" ? "#1b5e45" : "rgba(255,255,255,0.15)",
-                  color: "#ffffff",
-                  borderRadius: "6px",
-                  padding: "7px 11px",
-                }}
-                title={t("citizenDashboard")}
+                style={{ cursor: "pointer" }}
+                title="View Citizen Dashboard"
               >
-                👤 {t("citizenDashboard")}
-              </button>
-              <span className="hello">
                 {t("hello")} {user.name.split(" ")[0]}
               </span>
               <button onClick={logout}>{t("logout")}</button>
             </>
           ) : (
-            <>
-              <button
-                onClick={() => go("login")}
-                className={page === "login" ? "active" : ""}
-              >
-                {t("login")}
-              </button>
-              <button className="primary" onClick={() => go("signup")}>
-                {t("signup")}
-              </button>
-            </>
+            <button
+              onClick={() => go("login")}
+              className={`primary ${page === "login" ? "active" : ""}`}
+            >
+              {t("login")}
+            </button>
           )}
 
           <button
@@ -699,13 +737,24 @@ function App() {
   }
 
   if (page === "user-dashboard") {
-    if (!user) {
-      go("login");
+    const activeUser =
+      user ||
+      (() => {
+        try {
+          const saved = JSON.parse(localStorage.getItem(SESSION_KEY));
+          return saved?.id && saved?.name ? saved : null;
+        } catch {
+          return null;
+        }
+      })();
+
+    if (!activeUser) {
+      setTimeout(() => go("login"), 0);
       return null;
     }
     return (
       <UserDashboard
-        user={user}
+        user={activeUser}
         onLogout={logout}
         onNavigate={(target) => go(target)}
         onUserUpdate={(updatedUser) => setUser(updatedUser)}

@@ -132,7 +132,75 @@ function LocationMapUpdater({ position }) {
 
 export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate }) {
   const [currentUser, setCurrentUser] = useState(() => user || JSON.parse(localStorage.getItem("cw_session") || "{}"));
-  const [activePage, setActivePage] = useState("My Dashboard");
+
+  const getInitialTab = () => {
+    if (window.history.state && window.history.state.page === "user-dashboard" && window.history.state.tab) {
+      return window.history.state.tab;
+    }
+    const hash = window.location.hash;
+    const match = hash.match(/tab=([^&]+)/);
+    if (match) {
+      try {
+        const decoded = decodeURIComponent(match[1]);
+        const valid = ["My Dashboard", "Report a Problem", "My Reports", "My Locations", "Profile & Settings", "Help & FAQs"];
+        if (valid.includes(decoded)) return decoded;
+      } catch {
+        // ignore
+      }
+    }
+    return "My Dashboard";
+  };
+
+  const [activePage, setActivePage] = useState(getInitialTab);
+
+  function switchTab(tabName, pushHistory = true) {
+    if (tabName === activePage) return;
+    setActivePage(tabName);
+    setError("");
+    setSuccess("");
+    window.scrollTo(0, 0);
+    if (pushHistory) {
+      window.history.pushState(
+        { page: "user-dashboard", tab: tabName },
+        "",
+        `#user-dashboard?tab=${encodeURIComponent(tabName)}`
+      );
+    }
+  }
+
+  useEffect(() => {
+    const currentTab = getInitialTab();
+    if (!window.history.state || window.history.state.page !== "user-dashboard" || !window.history.state.tab) {
+      window.history.replaceState(
+        { page: "user-dashboard", tab: currentTab },
+        "",
+        `#user-dashboard?tab=${encodeURIComponent(currentTab)}`
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      if (event.state && event.state.page === "user-dashboard" && event.state.tab) {
+        setActivePage(event.state.tab);
+        setError("");
+        setSuccess("");
+      } else {
+        const hash = window.location.hash;
+        const match = hash.match(/tab=([^&]+)/);
+        if (match) {
+          try {
+            const decoded = decodeURIComponent(match[1]);
+            setActivePage(decoded);
+          } catch {
+            setActivePage("My Dashboard");
+          }
+        }
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -344,7 +412,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
       });
       setComplaintPhoto(null);
       await loadUserIssues();
-      setActivePage("My Reports");
+      switchTab("My Reports");
     } catch (err) {
       setError(err.response?.data?.error || "Failed to submit complaint. Please check your connection.");
     } finally {
@@ -455,7 +523,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
       pincode: loc.pincode || prev.pincode,
       state: loc.state || prev.state,
     }));
-    setActivePage("Report a Problem");
+    switchTab("Report a Problem");
   }
 
   // Export CSV
@@ -547,11 +615,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
             <button
               key={name}
               className={activePage === name ? "active" : ""}
-              onClick={() => {
-                setActivePage(name);
-                setError("");
-                setSuccess("");
-              }}
+              onClick={() => switchTab(name)}
             >
               <span>{icon}</span>
               {name}
@@ -644,24 +708,6 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               ↻ Refresh
             </button>
 
-            {activePage !== "Report a Problem" && (
-              <button
-                className="cw-primary-btn"
-                onClick={() => setActivePage("Report a Problem")}
-                style={{
-                  background: "#0b3d2e",
-                  color: "white",
-                  padding: "8px 14px",
-                  borderRadius: "6px",
-                  fontWeight: "600",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                + Report a Problem
-              </button>
-            )}
-
             <span className="cw-header-user">
               👤 {currentUser?.name ? currentUser.name.split(" ")[0] : "Citizen"}
             </span>
@@ -740,7 +786,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 </p>
               </div>
               <button
-                onClick={() => setActivePage("Report a Problem")}
+                onClick={() => switchTab("Report a Problem")}
                 style={{
                   background: "#f59e0b",
                   color: "#172033",
@@ -770,7 +816,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                     <span style={{ fontSize: "12px", color: "#64748b" }}>Your latest reported issues</span>
                   </div>
                   <button
-                    onClick={() => setActivePage("My Reports")}
+                    onClick={() => switchTab("My Reports")}
                     style={{ background: "transparent", border: "none", color: "#0b3d2e", fontWeight: "700", cursor: "pointer", fontSize: "12px" }}
                   >
                     View All ({issues.length}) →
@@ -781,7 +827,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   <div style={{ textAlign: "center", padding: "40px 10px", color: "#64748b" }}>
                     <p style={{ margin: 0 }}>You haven't reported any civic problems yet.</p>
                     <button
-                      onClick={() => setActivePage("Report a Problem")}
+                      onClick={() => switchTab("Report a Problem")}
                       style={{ marginTop: "12px", padding: "8px 16px", background: "#0b3d2e", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}
                     >
                       Report your first issue
@@ -1124,7 +1170,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "6px" }}>
                 <button
                   type="button"
-                  onClick={() => setActivePage("My Reports")}
+                  onClick={() => switchTab("My Reports")}
                   style={{ padding: "10px 18px", borderRadius: "6px", border: "1px solid #cbd5e1", background: "#f8fafc", cursor: "pointer", fontWeight: "600" }}
                 >
                   Cancel
@@ -1173,7 +1219,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   📥 Export CSV
                 </button>
                 <button
-                  onClick={() => setActivePage("Report a Problem")}
+                  onClick={() => switchTab("Report a Problem")}
                   style={{ padding: "6px 14px", borderRadius: "6px", border: "none", background: "#0b3d2e", color: "white", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
                 >
                   + New Report
