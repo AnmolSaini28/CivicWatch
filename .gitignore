@@ -1,4 +1,14 @@
-node_modules/
-**/node_modules/
-dist/
+# Environment files
 .env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build files
+dist/
+build/
+
+# Logs
+*.log

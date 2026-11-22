@@ -130,7 +130,74 @@ export default function AdminDashboard({
     if (onLogout) onLogout();
   }
 
-  const [activePage, setActivePage] = useState("Overview");
+  const getInitialTab = () => {
+    if (window.history.state && window.history.state.page === "admin" && window.history.state.tab) {
+      return window.history.state.tab;
+    }
+    const hash = window.location.hash;
+    const match = hash.match(/tab=([^&]+)/);
+    if (match) {
+      try {
+        const decoded = decodeURIComponent(match[1]);
+        const valid = ["Overview", "Live Issue Map", "Complaints", "Analytics", "Department Workload", "Notice Board"];
+        if (valid.includes(decoded)) return decoded;
+      } catch {
+        // ignore
+      }
+    }
+    return "Overview";
+  };
+
+  const [activePage, setActivePage] = useState(getInitialTab);
+
+  function switchTab(tabName, pushHistory = true) {
+    if (tabName === activePage) return;
+    setActivePage(tabName);
+    setError("");
+    setSuccess("");
+    window.scrollTo(0, 0);
+    if (pushHistory) {
+      window.history.pushState(
+        { page: "admin", tab: tabName },
+        "",
+        `#admin?tab=${encodeURIComponent(tabName)}`
+      );
+    }
+  }
+
+  useEffect(() => {
+    const currentTab = getInitialTab();
+    if (!window.history.state || window.history.state.page !== "admin" || !window.history.state.tab) {
+      window.history.replaceState(
+        { page: "admin", tab: currentTab },
+        "",
+        `#admin?tab=${encodeURIComponent(currentTab)}`
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      if (event.state && event.state.page === "admin" && event.state.tab) {
+        setActivePage(event.state.tab);
+        setError("");
+        setSuccess("");
+      } else {
+        const hash = window.location.hash;
+        const match = hash.match(/tab=([^&]+)/);
+        if (match) {
+          try {
+            const decoded = decodeURIComponent(match[1]);
+            setActivePage(decoded);
+          } catch {
+            setActivePage("Overview");
+          }
+        }
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   const [issues, setIssues] = useState([]);
   const [users, setUsers] = useState([]);
@@ -161,7 +228,6 @@ export default function AdminDashboard({
   // Load data from protected admin APIs.
   async function loadData() {
     if (!token) {
-      setError("Admin authentication token is missing.");
       setLoading(false);
       return;
     }
@@ -530,16 +596,53 @@ export default function AdminDashboard({
             >
               {loginBusy ? "Logging in..." : "Login to Admin Portal"}
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setLoginEmail("admin@civicwatch.gov.in");
-                setLoginPassword("Admin@12345678");
-              }}
-              style={{ padding: "8px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "6px", fontSize: "12px", cursor: "pointer", color: "#475569" }}
-            >
-              Click to Fill Demo Credentials
-            </button>
+            <div style={{ marginTop: "6px" }}>
+              <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", display: "block", marginBottom: "6px" }}>
+                Test Hierarchy Accounts:
+              </span>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginEmail("national@civicwatch.gov.in");
+                    setLoginPassword("Admin@12345678");
+                  }}
+                  style={{ padding: "6px 8px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "5px", fontSize: "11px", cursor: "pointer", color: "#0f172a", textAlign: "left" }}
+                >
+                  🇮🇳 National (All-India)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginEmail("state.mh@civicwatch.gov.in");
+                    setLoginPassword("Admin@12345678");
+                  }}
+                  style={{ padding: "6px 8px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "5px", fontSize: "11px", cursor: "pointer", color: "#0f172a", textAlign: "left" }}
+                >
+                  🚩 State (Maharashtra)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginEmail("admin.mumbai@civicwatch.gov.in");
+                    setLoginPassword("Admin@12345678");
+                  }}
+                  style={{ padding: "6px 8px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "5px", fontSize: "11px", cursor: "pointer", color: "#0f172a", textAlign: "left" }}
+                >
+                  🏙️ City (Mumbai)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginEmail("ward.powai@civicwatch.gov.in");
+                    setLoginPassword("Admin@12345678");
+                  }}
+                  style={{ padding: "6px 8px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "5px", fontSize: "11px", cursor: "pointer", color: "#0f172a", textAlign: "left" }}
+                >
+                  📍 Block (Powai Ward)
+                </button>
+              </div>
+            </div>
             <button
               type="button"
               onClick={onLogout}
@@ -581,7 +684,7 @@ export default function AdminDashboard({
               className={
                 activePage === name ? "active" : ""
               }
-              onClick={() => setActivePage(name)}
+              onClick={() => switchTab(name)}
             >
               <span>{icon}</span>
               {name}
@@ -622,7 +725,29 @@ export default function AdminDashboard({
 
         <header className="cw-header">
           <div>
-            <h1>{activePage}</h1>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <h1>{activePage}</h1>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: "700",
+                  padding: "4px 10px",
+                  borderRadius: "12px",
+                  background: "#dcfce7",
+                  color: "#166534",
+                  letterSpacing: "0.5px",
+                  border: "1px solid #bbf7d0",
+                }}
+              >
+                {admin?.admin_level === "NATIONAL"
+                  ? "🇮🇳 NATIONAL (PAN-INDIA)"
+                  : admin?.admin_level === "STATE"
+                    ? `🚩 STATE: ${admin.state}`
+                    : admin?.admin_level === "BLOCK"
+                      ? `📍 BLOCK: ${admin.block} (${admin.city})`
+                      : `🏙️ CITY: ${admin?.city || "MUMBAI"}`}
+              </span>
+            </div>
             <p>
               Monitor and manage civic issues across departments
             </p>
@@ -640,6 +765,15 @@ export default function AdminDashboard({
             <span className="cw-header-user">
               {admin?.name || "Administrator"}
             </span>
+
+            <button
+              type="button"
+              className="cw-header-logout"
+              onClick={handleLogout}
+              title="Logout from Admin Portal"
+            >
+              ↪ Logout
+            </button>
           </div>
         </header>
 
@@ -720,7 +854,7 @@ export default function AdminDashboard({
                   <div className="cw-panel-heading">
                     <h2>Recent Complaints</h2>
                     <button
-                      onClick={() => setActivePage("Complaints")}
+                      onClick={() => switchTab("Complaints")}
                     >
                       View all →
                     </button>
@@ -1188,7 +1322,7 @@ export default function AdminDashboard({
               {selectedIssue.photo_url ? (
                 <div style={{ width: "100%", maxHeight: "280px", borderRadius: "8px", overflow: "hidden", marginBottom: "16px", background: "#0f172a", textAlign: "center" }}>
                   <img
-                    src={`http://localhost:5001${selectedIssue.photo_url}`}
+                    src={selectedIssue.photo_url.startsWith("http") ? selectedIssue.photo_url : `http://localhost:5001${selectedIssue.photo_url.startsWith("/") ? "" : "/"}${selectedIssue.photo_url}`}
                     alt="Proof"
                     style={{ maxHeight: "280px", maxWidth: "100%", objectFit: "contain" }}
                   />
@@ -1467,7 +1601,7 @@ function ComplaintTable({
                 <td>
                   {issue.photo_url ? (
                     <img
-                      src={`http://localhost:5001${issue.photo_url}`}
+                      src={issue.photo_url.startsWith("http") ? issue.photo_url : `http://localhost:5001${issue.photo_url.startsWith("/") ? "" : "/"}${issue.photo_url}`}
                       alt="Proof"
                       style={{ width: "36px", height: "36px", objectFit: "cover", borderRadius: "5px", cursor: "pointer", border: "1px solid #d8e0db" }}
                       onClick={() => onSelectIssue && onSelectIssue(issue)}
@@ -1483,7 +1617,7 @@ function ComplaintTable({
                 <td>
                   <strong>{issue.title}</strong>
                   <span className="cw-cell-sub">
-                    {issue.city || "City not specified"}
+                    📍 {issue.block ? `${issue.block}, ` : ""}{issue.city || "Mumbai"}{issue.state ? ` • ${issue.state}` : ""}
                     {" · "}
                     {issue.category}
                   </span>
