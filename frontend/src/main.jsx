@@ -1,4 +1,4 @@
-import React, { useCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import axios from "axios";
 import {
@@ -269,35 +269,8 @@ function statusClass(status) {
 }
 
 function LatestReportsSlider({ issues, language, t, setTrackId, go }) {
-  const viewportRef = useRef(null);
-  const [viewportWidth, setViewportWidth] = useState(() =>
-    typeof window !== "undefined"
-      ? Math.min(window.innerWidth - 60, 1240)
-      : 1200
-  );
   const [isPaused, setIsPaused] = useState(false);
   const isTransitioningRef = useRef(false);
-
-  // Measure container width so cards and steps are mathematically exact
-  useEffect(() => {
-    if (!viewportRef.current) return;
-    const updateWidth = () => {
-      if (viewportRef.current) {
-        setViewportWidth(viewportRef.current.clientWidth);
-      }
-    };
-    updateWidth();
-    let ro;
-    if (typeof window.ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(updateWidth);
-      ro.observe(viewportRef.current);
-    }
-    window.addEventListener("resize", updateWidth);
-    return () => {
-      if (ro) ro.disconnect();
-      window.removeEventListener("resize", updateWidth);
-    };
-  }, []);
 
   // Ensure at least 4 items so circular slide is smooth
   const baseItems = useMemo(() => {
@@ -322,15 +295,6 @@ function LatestReportsSlider({ issues, language, t, setTrackId, go }) {
 
   const [currentIndex, setCurrentIndex] = useState(CLONES);
   const [withTransition, setWithTransition] = useState(true);
-
-  // Cards per view: exactly 3 on desktop, 2 on tablet, 1 on mobile
-  const cardsPerView = viewportWidth <= 540 ? 1 : viewportWidth <= 860 ? 2 : 3;
-  const gap = viewportWidth <= 540 ? 12 : 16;
-  const cardWidth =
-    viewportWidth > 0
-      ? (viewportWidth - (cardsPerView - 1) * gap) / cardsPerView
-      : 360;
-  const stepWidth = cardWidth + gap;
 
   const slideNext = useCallback(() => {
     if (isTransitioningRef.current || N <= 1) return;
@@ -426,8 +390,8 @@ function LatestReportsSlider({ issues, language, t, setTrackId, go }) {
           <p>{t("reportsIntro")}</p>
         </div>
         <div className="latest-header-actions">
-          <button className="text-link" onClick={() => go("map")}>
-            {t("exploreMap")} →
+          <button className="text-link" onClick={() => go("dashboard")}>
+            {t("viewDashboard")} →
           </button>
           {baseItems.length > 0 && (
             <div className="slider-nav-btns">
@@ -462,27 +426,21 @@ function LatestReportsSlider({ issues, language, t, setTrackId, go }) {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="latest-carousel-viewport" ref={viewportRef}>
+        <div className="latest-carousel-viewport">
           <div
             className="latest-carousel-track"
             onTransitionEnd={handleTransitionEnd}
             style={{
-              transform: `translateX(-${currentIndex * stepWidth}px)`,
+              transform: `translateX(calc(-1 * ${currentIndex} * ((100% + var(--gap)) / var(--cards-per-view))))`,
               transition: withTransition
                 ? "transform 0.55s cubic-bezier(0.25, 1, 0.5, 1)"
                 : "none",
-              gap: `${gap}px`,
             }}
           >
             {items.map((issue, idx) => (
               <article
                 className="latest-card"
                 key={`${issue.id || "rep"}-${idx}`}
-                style={{
-                  width: `${cardWidth}px`,
-                  flex: `0 0 ${cardWidth}px`,
-                  maxWidth: `${cardWidth}px`,
-                }}
               >
                 <div className="latest-meta">
                   <span>{issue.category || t("civicIssue")}</span>
@@ -1070,9 +1028,17 @@ function App() {
                 {[ ["🚧","road","roadText"], ["🗑️","garbage","garbageText"], ["💧","water","waterText"], ["💡","streetlight","streetlightText"], ["🌧️","drainage","drainageText"], ["📍","otherIssue","otherText"] ].map(([icon,title,desc]) => <button className="issue-category" key={title} onClick={() => go("report")}><span>{icon}</span><b>{t(title)}</b><small>{t(desc)}</small><i>↗</i></button>)}
               </div>
             </section>
-            <section className="latest-section"><div className="landing-width"><div className="issues-heading"><div><span className="section-kicker">{t("publicTransparency")}</span><h2>{t("latestReports")}</h2><p>{t("reportsIntro")}</p></div><button className="text-link" onClick={() => go("dashboard")}>{t("viewDashboard")} →</button></div>
-              <div className="latest-grid">{issues.length ? issues.slice(0, 2).map(issue => <article className="latest-card" key={issue.id}><div className="latest-meta"><span>{issue.category || t("civicIssue")}</span><em className={"status " + statusClass(issue.status)}>{translateStatus(issue.status, language)}</em></div><h3>{issue.title || issue.description || t("civicIssue")}</h3><div className="latest-bottom"><small>{issue.tracking_id}</small><button onClick={() => { setTrackId(issue.tracking_id || ""); go("track"); }}>{t("trackReport")} →</button></div></article>) : <p className="no-reports-note">{t("noRecentReports")}</p>}</div>
-            </div></section>
+            <section className="latest-section">
+              <div className="landing-width">
+                <LatestReportsSlider
+                  issues={issues}
+                  language={language}
+                  t={t}
+                  setTrackId={setTrackId}
+                  go={go}
+                />
+              </div>
+            </section>
             <section className="landing-cta"><div className="landing-width cta-inner"><div><span className="section-kicker">{t("voiceDifference")}</span><h2>{t("ctaTitle")}</h2><p>{t("ctaText")}</p></div><button className="gold-button" onClick={() => go("report")}>{t("reportIssue")} ↗</button></div></section>
           </div>
         )}
