@@ -582,12 +582,15 @@ app.post("/api/auth/signup", async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
+    const state = (req.body.state || "Maharashtra").trim();
+    const city = (req.body.city || "Mumbai").trim();
+
     const result = await pool.query(
       `
       INSERT INTO users
-      (name, email, gender, mobile, password_hash)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, name, email, gender, mobile
+      (name, email, gender, mobile, password_hash, state, city)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, name, email, gender, mobile, state, city
       `,
       [
         name.trim(),
@@ -595,6 +598,8 @@ app.post("/api/auth/signup", async (req, res) => {
         gender,
         normalizedMobile,
         passwordHash,
+        state,
+        city,
       ]
     );
 
@@ -639,6 +644,8 @@ app.post("/api/auth/login", async (req, res) => {
         email,
         gender,
         mobile,
+        state,
+        city,
         password_hash
       FROM users
       WHERE email = $1
@@ -878,6 +885,133 @@ app.get("/api/user/issues/:userId", async (req, res) => {
     res.status(500).json({
       error: "Failed to fetch user complaints"
     });
+  }
+});
+
+// ==========================================
+// USER PROFILE UPDATE
+// ==========================================
+
+app.put("/api/user/profile/:userId", async (req, res) => {
+  const userId = parseInt(req.params.userId, 10);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ error: "Invalid user ID" });
+  }
+
+  const { name, mobile, gender, city, state } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: "Name is required" });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE users
+       SET name = $1,
+           mobile = COALESCE($2, mobile),
+           gender = COALESCE($3, gender),
+           city = COALESCE($4, city),
+           state = COALESCE($5, state)
+       WHERE id = $6
+       RETURNING id, name, email, gender, mobile, state, city`,
+      [
+        name.trim(),
+        mobile ? mobile.trim() : null,
+        gender || null,
+        city ? city.trim() : null,
+        state ? state.trim() : null,
+        userId
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({
+      message: "Profile updated successfully",
+      user: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Update profile:", error.message);
+    res.status(500).json({ error: "Failed to update profile" });
+  }
+});
+
+// ==========================================
+// USER PASSWORD UPDATE
+// ==========================================
+
+app.put("/api/user/password/:userId", async (req, res) => {
+  const userId = parseInt(req.params.userId, 10);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ error: "Invalid user ID" });
+  }
+
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: "Current and new passwords are required" });
+  }
+
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: "New password must be at least 8 characters" });
+  }
+
+  try {
+    const userRes = await pool.query("SELECT password_hash FROM users WHERE id = $1", [userId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const matches = await bcrypt.compare(currentPassword, userRes.rows[0].password_hash);
+    if (!matches) {
+      return res.status(401).json({ error: "Current password is incorrect" });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [newHash, userId]);
+
+    res.json({ message: "Password updated successfully" });
+  } catch (error) {
+    console.error("Change password:", error.message);
+    res.status(500).json({ error: "Failed to update password" });
+  }
+});
+
+// ==========================================
+// CANCEL / WITHDRAW PENDING COMPLAINT
+// ==========================================
+
+app.delete("/api/user/issues/:issueId", async (req, res) => {
+  const issueId = parseInt(req.params.issueId, 10);
+  const userId = parseInt(req.query.userId, 10);
+
+  if (!Number.isInteger(issueId) || !Number.isInteger(userId)) {
+    return res.status(400).json({ error: "Invalid issue ID or user ID" });
+  }
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM issues
+       WHERE id = $1 AND user_id = $2 AND status = 'Pending'
+       RETURNING id, tracking_id`,
+      [issueId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({
+        error: "Complaint not found or cannot be cancelled once In Progress / Resolved"
+      });
+    }
+
+    res.json({
+      message: `Complaint ${result.rows[0].tracking_id} successfully cancelled`,
+      id: issueId
+    });
+  } catch (error) {
+    console.error("Delete issue:", error.message);
+    res.status(500).json({ error: "Failed to cancel complaint" });
   }
 });
 
