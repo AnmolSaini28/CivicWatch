@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import axios from "axios";
 import {
@@ -262,6 +262,267 @@ function translateStatus(status, language) {
     resolved: "हल हो गया",
   };
   return labels[String(status || "").toLowerCase()] || status;
+}
+
+function statusClass(status) {
+  return String(status || "pending").toLowerCase().replace(/\s+/g, "-");
+}
+
+function LatestReportsSlider({ issues, language, t, setTrackId, go }) {
+  const viewportRef = useRef(null);
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window !== "undefined"
+      ? Math.min(window.innerWidth - 60, 1240)
+      : 1200
+  );
+  const [isPaused, setIsPaused] = useState(false);
+  const isTransitioningRef = useRef(false);
+
+  // Measure container width so cards and steps are mathematically exact
+  useEffect(() => {
+    if (!viewportRef.current) return;
+    const updateWidth = () => {
+      if (viewportRef.current) {
+        setViewportWidth(viewportRef.current.clientWidth);
+      }
+    };
+    updateWidth();
+    let ro;
+    if (typeof window.ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(updateWidth);
+      ro.observe(viewportRef.current);
+    }
+    window.addEventListener("resize", updateWidth);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", updateWidth);
+    };
+  }, []);
+
+  // Ensure at least 4 items so circular slide is smooth
+  const baseItems = useMemo(() => {
+    if (!issues || issues.length === 0) return [];
+    let list = [...issues];
+    while (list.length < 4) {
+      list = [...list, ...issues];
+    }
+    return list;
+  }, [issues]);
+
+  const N = baseItems.length;
+  const CLONES = 3;
+
+  // Cloned array for infinite circular sliding
+  const items = useMemo(() => {
+    if (N === 0) return [];
+    const startClones = baseItems.slice(-CLONES);
+    const endClones = baseItems.slice(0, CLONES);
+    return [...startClones, ...baseItems, ...endClones];
+  }, [baseItems, N]);
+
+  const [currentIndex, setCurrentIndex] = useState(CLONES);
+  const [withTransition, setWithTransition] = useState(true);
+
+  // Cards per view: exactly 3 on desktop, 2 on tablet, 1 on mobile
+  const cardsPerView = viewportWidth <= 540 ? 1 : viewportWidth <= 860 ? 2 : 3;
+  const gap = viewportWidth <= 540 ? 12 : 16;
+  const cardWidth =
+    viewportWidth > 0
+      ? (viewportWidth - (cardsPerView - 1) * gap) / cardsPerView
+      : 360;
+  const stepWidth = cardWidth + gap;
+
+  const slideNext = useCallback(() => {
+    if (isTransitioningRef.current || N <= 1) return;
+    isTransitioningRef.current = true;
+    setWithTransition(true);
+    setCurrentIndex((prev) => prev + 1);
+    setTimeout(() => {
+      isTransitioningRef.current = false;
+    }, 600);
+  }, [N]);
+
+  const slidePrev = useCallback(() => {
+    if (isTransitioningRef.current || N <= 1) return;
+    isTransitioningRef.current = true;
+    setWithTransition(true);
+    setCurrentIndex((prev) => prev - 1);
+    setTimeout(() => {
+      isTransitioningRef.current = false;
+    }, 600);
+  }, [N]);
+
+  // Seamless circular reset when reaching clone boundaries
+  const handleTransitionEnd = () => {
+    isTransitioningRef.current = false;
+    if (currentIndex >= N + CLONES) {
+      setWithTransition(false);
+      setCurrentIndex(currentIndex - N);
+    } else if (currentIndex < CLONES) {
+      setWithTransition(false);
+      setCurrentIndex(currentIndex + N);
+    }
+  };
+
+  // Re-enable transition on next frame after non-animated jump
+  useEffect(() => {
+    if (!withTransition) {
+      const raf1 = requestAnimationFrame(() => {
+        const raf2 = requestAnimationFrame(() => {
+          setWithTransition(true);
+        });
+        return () => cancelAnimationFrame(raf2);
+      });
+      return () => cancelAnimationFrame(raf1);
+    }
+  }, [withTransition]);
+
+  // Auto-slide timer: slides every 3 seconds in circular fashion
+  useEffect(() => {
+    if (isPaused || N <= 1) return;
+    const timer = setInterval(() => {
+      slideNext();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [isPaused, N, slideNext]);
+
+  // Touch gesture support
+  const touchStartX = useRef(0);
+  const touchDeltaX = useRef(0);
+
+  const handleTouchStart = (e) => {
+    setIsPaused(true);
+    touchStartX.current = e.touches[0].clientX;
+    touchDeltaX.current = 0;
+  };
+
+  const handleTouchMove = (e) => {
+    touchDeltaX.current = e.touches[0].clientX - touchStartX.current;
+  };
+
+  const handleTouchEnd = () => {
+    if (touchDeltaX.current < -40) {
+      slideNext();
+    } else if (touchDeltaX.current > 40) {
+      slidePrev();
+    }
+    setIsPaused(false);
+  };
+
+  if (!issues || issues.length === 0) {
+    return <p className="no-reports-note">{t("noRecentReports")}</p>;
+  }
+
+  const rawCount = issues.length || 1;
+  const activeDotIndex =
+    (((currentIndex - CLONES) % rawCount) + rawCount) % rawCount;
+
+  return (
+    <>
+      <div className="issues-heading">
+        <div>
+          <span className="section-kicker">{t("publicTransparency")}</span>
+          <h2>{t("latestReports")}</h2>
+          <p>{t("reportsIntro")}</p>
+        </div>
+        <div className="latest-header-actions">
+          <button className="text-link" onClick={() => go("map")}>
+            {t("exploreMap")} →
+          </button>
+          {baseItems.length > 0 && (
+            <div className="slider-nav-btns">
+              <button
+                type="button"
+                className="slider-arrow-btn"
+                onClick={slidePrev}
+                aria-label="Previous report"
+                title="Previous"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                className="slider-arrow-btn"
+                onClick={slideNext}
+                aria-label="Next report"
+                title="Next"
+              >
+                ›
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div
+        className="latest-carousel-wrapper"
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="latest-carousel-viewport" ref={viewportRef}>
+          <div
+            className="latest-carousel-track"
+            onTransitionEnd={handleTransitionEnd}
+            style={{
+              transform: `translateX(-${currentIndex * stepWidth}px)`,
+              transition: withTransition
+                ? "transform 0.55s cubic-bezier(0.25, 1, 0.5, 1)"
+                : "none",
+              gap: `${gap}px`,
+            }}
+          >
+            {items.map((issue, idx) => (
+              <article
+                className="latest-card"
+                key={`${issue.id || "rep"}-${idx}`}
+                style={{
+                  width: `${cardWidth}px`,
+                  flex: `0 0 ${cardWidth}px`,
+                  maxWidth: `${cardWidth}px`,
+                }}
+              >
+                <div className="latest-meta">
+                  <span>{issue.category || t("civicIssue")}</span>
+                  <em className={"status " + statusClass(issue.status)}>
+                    {translateStatus(issue.status, language)}
+                  </em>
+                </div>
+                <h3>{issue.title || issue.description || t("civicIssue")}</h3>
+                <div className="latest-bottom">
+                  <small>{issue.tracking_id}</small>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTrackId(issue.tracking_id || "");
+                      go("track");
+                    }}
+                  >
+                    {t("trackReport")} →
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        {rawCount > 1 && (
+          <div className="latest-carousel-dots">
+            {issues.slice(0, Math.min(rawCount, 6)).map((_, i) => (
+              <span
+                key={i}
+                className={
+                  "latest-dot " + (activeDotIndex === i ? "active" : "")
+                }
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
 }
 
 function App() {
@@ -809,7 +1070,7 @@ function App() {
                 {[ ["🚧","road","roadText"], ["🗑️","garbage","garbageText"], ["💧","water","waterText"], ["💡","streetlight","streetlightText"], ["🌧️","drainage","drainageText"], ["📍","otherIssue","otherText"] ].map(([icon,title,desc]) => <button className="issue-category" key={title} onClick={() => go("report")}><span>{icon}</span><b>{t(title)}</b><small>{t(desc)}</small><i>↗</i></button>)}
               </div>
             </section>
-            <section className="latest-section"><div className="landing-width"><div className="issues-heading"><div><span className="section-kicker">{t("publicTransparency")}</span><h2>{t("latestReports")}</h2><p>{t("reportsIntro")}</p></div><button className="text-link" onClick={() => go("map")}>{t("exploreMap")} →</button></div>
+            <section className="latest-section"><div className="landing-width"><div className="issues-heading"><div><span className="section-kicker">{t("publicTransparency")}</span><h2>{t("latestReports")}</h2><p>{t("reportsIntro")}</p></div><button className="text-link" onClick={() => go("dashboard")}>{t("viewDashboard")} →</button></div>
               <div className="latest-grid">{issues.length ? issues.slice(0, 2).map(issue => <article className="latest-card" key={issue.id}><div className="latest-meta"><span>{issue.category || t("civicIssue")}</span><em className={"status " + statusClass(issue.status)}>{translateStatus(issue.status, language)}</em></div><h3>{issue.title || issue.description || t("civicIssue")}</h3><div className="latest-bottom"><small>{issue.tracking_id}</small><button onClick={() => { setTrackId(issue.tracking_id || ""); go("track"); }}>{t("trackReport")} →</button></div></article>) : <p className="no-reports-note">{t("noRecentReports")}</p>}</div>
             </div></section>
             <section className="landing-cta"><div className="landing-width cta-inner"><div><span className="section-kicker">{t("voiceDifference")}</span><h2>{t("ctaTitle")}</h2><p>{t("ctaText")}</p></div><button className="gold-button" onClick={() => go("report")}>{t("reportIssue")} ↗</button></div></section>

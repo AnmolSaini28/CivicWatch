@@ -13,6 +13,7 @@ const pool = require("./db");
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+const JWT_SECRET = process.env.JWT_SECRET || "civicwatch_admin_jwt_secret_key_2026";
 
 app.use(cors());
 app.use(express.json());
@@ -119,7 +120,7 @@ async function verifyAdmin(req, res, next) {
   try {
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { algorithms: ["HS256"] }
     );
 
@@ -739,7 +740,7 @@ app.post("/api/admin/login", async (req, res) => {
         adminId: admin.id,
         type: "admin"
       },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       {
         algorithm: "HS256",
         expiresIn: "8h"
