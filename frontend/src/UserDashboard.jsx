@@ -1187,12 +1187,118 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                           </p>
                         )}
                       </div>
-                      <div style={{ marginTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "8px", borderTop: "1px solid #f1f5f9" }}>
+
+                      {/* Part 2: Voting & Verification on Alert Card */}
+                      <div
+                        style={{
+                          marginTop: "10px",
+                          paddingTop: "8px",
+                          borderTop: "1px solid #f1f5f9",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "8px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!currentUser?.id || !n.issue_id) return;
+                              try {
+                                const res = await axios.post(`${API}/issues/${n.issue_id}/vote`, {
+                                  userId: currentUser.id,
+                                  voteType: "upvote",
+                                });
+                                setNotifications((prev) =>
+                                  prev.map((item) =>
+                                    item.issue_id === n.issue_id
+                                      ? {
+                                          ...item,
+                                          upvotes_count: res.data.upvotes_count,
+                                          downvotes_count: res.data.downvotes_count,
+                                          userVote: res.data.userVote,
+                                        }
+                                      : item
+                                  )
+                                );
+                              } catch (err) {
+                                console.error("Vote error:", err);
+                              }
+                            }}
+                            style={{
+                              background: n.userVote === "upvote" ? "#dcfce7" : "#ffffff",
+                              border: n.userVote === "upvote" ? "1px solid #16a34a" : "1px solid #cbd5e1",
+                              color: n.userVote === "upvote" ? "#15803d" : "#334155",
+                              borderRadius: "6px",
+                              padding: "4px 8px",
+                              fontSize: "11px",
+                              fontWeight: "700",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                            title="Verify Issue (Upvote)"
+                          >
+                            <span>👍</span> {n.upvotes_count || 0}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!currentUser?.id || !n.issue_id) return;
+                              try {
+                                const res = await axios.post(`${API}/issues/${n.issue_id}/vote`, {
+                                  userId: currentUser.id,
+                                  voteType: "downvote",
+                                });
+                                setNotifications((prev) =>
+                                  prev.map((item) =>
+                                    item.issue_id === n.issue_id
+                                      ? {
+                                          ...item,
+                                          upvotes_count: res.data.upvotes_count,
+                                          downvotes_count: res.data.downvotes_count,
+                                          userVote: res.data.userVote,
+                                        }
+                                      : item
+                                  )
+                                );
+                              } catch (err) {
+                                console.error("Vote error:", err);
+                              }
+                            }}
+                            style={{
+                              background: n.userVote === "downvote" ? "#fee2e2" : "#ffffff",
+                              border: n.userVote === "downvote" ? "1px solid #dc2626" : "1px solid #cbd5e1",
+                              color: n.userVote === "downvote" ? "#b91c1c" : "#334155",
+                              borderRadius: "6px",
+                              padding: "4px 8px",
+                              fontSize: "11px",
+                              fontWeight: "700",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                            title="Flag as Duplicate or Fake (Downvote)"
+                          >
+                            <span>👎</span> {n.downvotes_count || 0}
+                          </button>
+
+                          {n.is_duplicate && (
+                            <span style={{ fontSize: "10px", fontWeight: "800", color: "#854d0e", background: "#fef9c3", border: "1px solid #fef08a", padding: "2px 6px", borderRadius: "4px" }}>
+                              ⚠️ Duplicate
+                            </span>
+                          )}
+                        </div>
+
                         <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>
                           {n.tracking_id || "CW-ALERT"}
-                        </span>
-                        <span style={{ fontSize: "11px", fontWeight: "700", color: "#0b3d2e" }}>
-                          {n.is_read ? "✓ Viewed" : "● Tap to read"}
                         </span>
                       </div>
                     </div>
