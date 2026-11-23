@@ -460,6 +460,9 @@ function LatestReportsSlider({ issues, language, t, setTrackId, go }) {
                       <span>👎</span> {issue.downvotes_count}
                     </span>
                   )}
+                  <span style={{ fontSize: "11px", fontWeight: "600", color: "#475569", background: "#f1f5f9", padding: "2px 8px", borderRadius: "12px", border: "1px solid #e2e8f0", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                    <span>💬</span> {issue.comments_count || 0}
+                  </span>
                   {issue.is_duplicate && (
                     <span style={{ fontSize: "10px", fontWeight: "800", color: "#854d0e", background: "#fef9c3", border: "1px solid #fef08a", padding: "2px 6px", borderRadius: "4px" }}>
                       ⚠️ Duplicate
@@ -583,6 +586,46 @@ function App() {
   });
   const [trackId, setTrackId] = useState("");
   const [tracked, setTracked] = useState(null);
+  const [trackedComments, setTrackedComments] = useState([]);
+  const [newCommentText, setNewCommentText] = useState("");
+  const [commentPosting, setCommentPosting] = useState(false);
+
+  const loadTrackedComments = async (issueId) => {
+    try {
+      const res = await axios.get(`${API}/issues/${issueId}/comments`);
+      setTrackedComments(res.data || []);
+    } catch {
+      setTrackedComments([]);
+    }
+  };
+
+  const handlePostComment = async (e) => {
+    e.preventDefault();
+    if (!user?.id) {
+      alert("Please login to participate in the citizen discussion.");
+      go("login");
+      return;
+    }
+    const text = newCommentText.trim();
+    if (!text || !tracked?.id) return;
+    setCommentPosting(true);
+    try {
+      const res = await axios.post(`${API}/issues/${tracked.id}/comments`, {
+        userId: user.id,
+        comment: text,
+      });
+      setTrackedComments((prev) => [...prev, res.data]);
+      setNewCommentText("");
+      setTracked((prev) => ({
+        ...prev,
+        comments_count: (Number(prev.comments_count) || 0) + 1,
+      }));
+    } catch (err) {
+      alert(err.response?.data?.error || "Could not post comment.");
+    } finally {
+      setCommentPosting(false);
+    }
+  };
   const [userReports, setUserReports] = useState([]);
   const [complaint, setComplaint] = useState({
     title: "",
@@ -686,10 +729,14 @@ function App() {
         API + "/issues/track/" + encodeURIComponent(trackId.trim())
       );
       setTracked(response.data);
+      if (response.data?.id) {
+        loadTrackedComments(response.data.id);
+      }
     } catch {
       setTracked({
         error: "No issue found with this tracking ID",
       });
+      setTrackedComments([]);
     }
   }
 
@@ -1451,6 +1498,117 @@ function App() {
                           <span>👎</span> {tracked.userVote === "downvote" ? "Flagged by You" : "Flag Duplicate/Fake"}
                         </button>
                       </div>
+                    </div>
+
+                    {/* Part 3: Social Media Style Citizen Discussion Section */}
+                    <div style={{ marginTop: "16px", padding: "16px", background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", boxShadow: "0 1px 4px rgba(0,0,0,0.03)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1px solid #f1f5f9", paddingBottom: "8px" }}>
+                        <h4 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span>💬</span> Citizen Discussion ({trackedComments.length})
+                        </h4>
+                        <span style={{ fontSize: "11px", color: "#64748b" }}>Ground updates & resident talk</span>
+                      </div>
+
+                      {/* Comments Stream */}
+                      <div style={{ maxHeight: "280px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
+                        {trackedComments.length === 0 ? (
+                          <div style={{ padding: "18px", textAlign: "center", color: "#94a3b8", fontSize: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
+                            No citizen comments yet. Be the first to share an update about this issue!
+                          </div>
+                        ) : (
+                          trackedComments.map((c) => (
+                            <div
+                              key={c.id}
+                              style={{
+                                padding: "10px 12px",
+                                background: "#f8fafc",
+                                borderRadius: "8px",
+                                border: "1px solid #f1f5f9",
+                                display: "flex",
+                                gap: "10px",
+                                alignItems: "flex-start",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: "32px",
+                                  height: "32px",
+                                  borderRadius: "50%",
+                                  background: "#082f26",
+                                  color: "#a7f3d0",
+                                  fontWeight: "700",
+                                  fontSize: "12px",
+                                  display: "grid",
+                                  placeItems: "center",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {c.user_name ? c.user_name.charAt(0).toUpperCase() : "C"}
+                              </div>
+
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2px" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                    <span style={{ fontSize: "12px", fontWeight: "700", color: "#0f172a" }}>
+                                      {c.user_name || "Citizen"}
+                                    </span>
+                                    <span style={{ fontSize: "9px", background: "#dcfce7", color: "#166534", padding: "1px 5px", borderRadius: "4px", fontWeight: "700" }}>
+                                      ✓ Resident
+                                    </span>
+                                  </div>
+                                  <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+                                    {new Date(c.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                </div>
+                                <p style={{ margin: 0, fontSize: "12px", color: "#334155", lineHeight: "1.4" }}>
+                                  {c.comment}
+                                </p>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      {/* Post Comment Input */}
+                      <form onSubmit={handlePostComment} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <textarea
+                          rows="2"
+                          value={newCommentText}
+                          onChange={(e) => setNewCommentText(e.target.value)}
+                          placeholder={user ? "Write a comment or on-ground update as " + user.name.split(" ")[0] + "..." : "Login to join the citizen discussion..."}
+                          disabled={!user || commentPosting}
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            borderRadius: "6px",
+                            border: "1px solid #cbd5e1",
+                            fontSize: "12px",
+                            resize: "none",
+                            background: user ? "white" : "#f8fafc",
+                          }}
+                        />
+                        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                          <button
+                            type="submit"
+                            disabled={!user || !newCommentText.trim() || commentPosting}
+                            style={{
+                              background: user && newCommentText.trim() ? "#082f26" : "#cbd5e1",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "6px",
+                              padding: "6px 14px",
+                              fontSize: "12px",
+                              fontWeight: "700",
+                              cursor: user && newCommentText.trim() ? "pointer" : "not-allowed",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            <span>➤</span> {commentPosting ? "Posting..." : "Post Comment"}
+                          </button>
+                        </div>
+                      </form>
                     </div>
                   </>
                 )}

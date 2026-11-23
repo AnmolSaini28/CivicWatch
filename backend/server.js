@@ -266,6 +266,7 @@ app.get("/api/issues", async (_req, res) => {
         longitude,
         upvotes_count,
         downvotes_count,
+        comments_count,
         is_duplicate,
         duplicate_of_id,
         created_at
@@ -369,6 +370,7 @@ app.get(
           longitude,
           upvotes_count,
           downvotes_count,
+          comments_count,
           is_duplicate,
           duplicate_of_id,
           created_at,
@@ -607,6 +609,7 @@ app.post(
           longitude,
           upvotes_count,
           downvotes_count,
+          comments_count,
           is_duplicate,
           duplicate_of_id,
           created_at
@@ -929,6 +932,11 @@ app.get("/api/admin/issues", verifyAdmin, async (req, res) => {
         i.pincode,
         i.latitude,
         i.longitude,
+        i.upvotes_count,
+        i.downvotes_count,
+        i.comments_count,
+        i.is_duplicate,
+        i.duplicate_of_id,
         i.created_at,
         i.resolved_at,
         CASE
@@ -986,6 +994,7 @@ app.get("/api/user/issues/:userId", async (req, res) => {
         longitude,
         upvotes_count,
         downvotes_count,
+        comments_count,
         is_duplicate,
         duplicate_of_id,
         is_anonymous,
@@ -1215,6 +1224,7 @@ app.get("/api/notifications/:userId", async (req, res) => {
         i.longitude as issue_lng,
         i.upvotes_count,
         i.downvotes_count,
+        i.comments_count,
         i.is_duplicate,
         i.duplicate_of_id
       FROM notifications n
@@ -1297,6 +1307,158 @@ app.put("/api/user/location/:userId", async (req, res) => {
   } catch (error) {
     console.error("Update user location error:", error.message);
     res.status(500).json({ error: "Failed to update user location" });
+  }
+});
+
+// ==========================================
+// PART 3: CITIZEN DISCUSSION & COMMENTS
+// ==========================================
+
+// GET all comments for an issue
+app.get("/api/issues/:id/comments", async (req, res) => {
+  const issueId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(issueId) || issueId <= 0) {
+    return res.status(400).json({ error: "Invalid issue ID" });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT
+        c.id,
+        c.issue_id,
+        c.user_id,
+        c.comment,
+        c.created_at,
+        u.name as user_name,
+        u.city as user_city
+      FROM issue_comments c
+      JOIN users u ON c.user_id = u.id
+      WHERE c.issue_id = $1
+      ORDER BY c.created_at ASC`,
+      [issueId]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Fetch comments error:", error.message);
+    res.status(500).json({ error: "Failed to fetch comments" });
+  }
+});
+
+// POST a new comment on an issue
+app.post("/api/issues/:id/comments", async (req, res) => {
+  const issueId = parseInt(req.params.id, 10);
+  const { userId, comment } = req.body;
+
+  if (!Number.isInteger(issueId) || !Number.isInteger(Number(userId))) {
+    return res.status(400).json({ error: "Valid issue ID and user ID are required" });
+  }
+
+  const commentText = (comment || "").trim();
+  if (!commentText) {
+    return res.status(400).json({ error: "Comment text cannot be empty" });
+  }
+  if (commentText.length > 1000) {
+    return res.status(400).json({ error: "Comment is too long (maximum 1000 characters)" });
+  }
+
+  try {
+    // Verify user exists
+    const userRes = await pool.query("SELECT id, name, city FROM users WHERE id = $1", [userId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Verify issue exists
+    const issueRes = await pool.query("SELECT id FROM issues WHERE id = $1", [issueId]);
+    if (issueRes.rows.length === 0) {
+      return res.status(404).json({ error: "Issue not found" });
+    }
+
+    const insertRes = await pool.query(
+      `INSERT INTO issue_comments (issue_id, user_id, comment)
+       VALUES ($1, $2, $3)
+       RETURNING id, issue_id, user_id, comment, created_at`,
+      [issueId, Number(userId), commentText]
+    );
+
+    // Increment comments_count in issues table
+    await pool.query(
+      "UPDATE issues SET comments_count = comments_count + 1 WHERE id = $1",
+      [issueId]
+    );
+
+    const newComment = {
+      ...insertRes.rows[0],
+      user_name: userRes.rows[0].name,
+      user_city: userRes.rows[0].city,
+    };
+
+    res.status(201).json(newComment);
+  } catch (error) {
+    console.error("Post comment error:", error.message);
+    res.status(500).json({ error: "Failed to post comment" });
+  }
+});
+
+// DELETE a comment (Owner or Admin moderation)
+app.delete("/api/comments/:id", async (req, res) => {
+  const commentId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(commentId) || commentId <= 0) {
+    return res.status(400).json({ error: "Invalid comment ID" });
+  }
+
+  try {
+    const commentRes = await pool.query("SELECT id, issue_id FROM issue_comments WHERE id = $1", [commentId]);
+    if (commentRes.rows.length === 0) {
+      return res.status(404).json({ error: "Comment not found" });
+    }
+
+    const issueId = commentRes.rows[0].issue_id;
+
+    await pool.query("DELETE FROM issue_comments WHERE id = $1", [commentId]);
+
+    await pool.query(
+      "UPDATE issues SET comments_count = GREATEST(0, comments_count - 1) WHERE id = $1",
+      [issueId]
+    );
+
+    res.json({ success: true, message: "Comment deleted successfully" });
+  } catch (error) {
+    console.error("Delete comment error:", error.message);
+    res.status(500).json({ error: "Failed to delete comment" });
+  }
+});
+
+// PUT admin mark or unmark an issue as duplicate
+app.put("/api/admin/issues/:id/mark-duplicate", async (req, res) => {
+  const issueId = parseInt(req.params.id, 10);
+  const { isDuplicate, duplicateOfId } = req.body;
+
+  if (!Number.isInteger(issueId) || issueId <= 0) {
+    return res.status(400).json({ error: "Invalid issue ID" });
+  }
+
+  try {
+    const dupBool = isDuplicate === true || isDuplicate === "true";
+    const dupId = duplicateOfId ? parseInt(duplicateOfId, 10) : null;
+
+    const result = await pool.query(
+      `UPDATE issues 
+       SET is_duplicate = $1, duplicate_of_id = $2
+       WHERE id = $3
+       RETURNING id, tracking_id, is_duplicate, duplicate_of_id`,
+      [dupBool, dupId, issueId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Issue not found" });
+    }
+
+    res.json({ success: true, issue: result.rows[0] });
+  } catch (error) {
+    console.error("Mark duplicate error:", error.message);
+    res.status(500).json({ error: "Failed to update duplicate status" });
   }
 });
 
@@ -1662,6 +1824,22 @@ async function initDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_issue_votes_lookup 
         ON issue_votes(issue_id, user_id);
+    `);
+
+    // 4d. Part 3: Social Media Style Citizen Discussion & Comments table
+    await pool.query(`
+      ALTER TABLE issues ADD COLUMN IF NOT EXISTS comments_count INTEGER NOT NULL DEFAULT 0;
+
+      CREATE TABLE IF NOT EXISTS issue_comments (
+        id SERIAL PRIMARY KEY,
+        issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        comment TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_issue_comments_issue 
+        ON issue_comments(issue_id, created_at ASC);
     `);
 
     // 5. Ensure default demo admin accounts exist with known password

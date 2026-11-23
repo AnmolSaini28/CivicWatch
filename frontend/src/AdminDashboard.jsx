@@ -225,6 +225,69 @@ export default function AdminDashboard({
   // Selected complaint for detail modal.
   const [selectedIssue, setSelectedIssue] = useState(null);
 
+  // Part 3: Admin comments & duplicate moderation state
+  const [adminComments, setAdminComments] = useState([]);
+  const [adminCommentsLoading, setAdminCommentsLoading] = useState(false);
+
+  const loadAdminComments = async (issueId) => {
+    setAdminCommentsLoading(true);
+    try {
+      const res = await axios.get(`${API}/issues/${issueId}/comments`);
+      setAdminComments(res.data || []);
+    } catch {
+      setAdminComments([]);
+    } finally {
+      setAdminCommentsLoading(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm("Are you sure you want to delete this comment?")) return;
+    try {
+      await axios.delete(`${API}/comments/${commentId}`);
+      setAdminComments((prev) => prev.filter((c) => c.id !== commentId));
+      setSelectedIssue((prev) => ({
+        ...prev,
+        comments_count: Math.max(0, (Number(prev?.comments_count) || 0) - 1),
+      }));
+      setIssues((prev) =>
+        prev.map((i) =>
+          i.id === selectedIssue?.id
+            ? { ...i, comments_count: Math.max(0, (Number(i.comments_count) || 0) - 1) }
+            : i
+        )
+      );
+    } catch {
+      alert("Failed to delete comment.");
+    }
+  };
+
+  const handleToggleDuplicate = async (issueId, currentDuplicate) => {
+    const nextDup = !currentDuplicate;
+    try {
+      const res = await axios.put(`${API}/admin/issues/${issueId}/mark-duplicate`, {
+        isDuplicate: nextDup,
+      });
+      setSelectedIssue((prev) => ({
+        ...prev,
+        is_duplicate: res.data.issue.is_duplicate,
+      }));
+      setIssues((prev) =>
+        prev.map((i) => (i.id === issueId ? { ...i, is_duplicate: res.data.issue.is_duplicate } : i))
+      );
+    } catch {
+      alert("Failed to update duplicate status.");
+    }
+  };
+
+  useEffect(() => {
+    if (selectedIssue?.id) {
+      loadAdminComments(selectedIssue.id);
+    } else {
+      setAdminComments([]);
+    }
+  }, [selectedIssue?.id]);
+
   // Load data from protected admin APIs.
   async function loadData() {
     if (!token) {
@@ -1361,6 +1424,110 @@ export default function AdminDashboard({
                 </div>
               )}
 
+              {/* Part 2 & 3: Community Verification, Duplicate Management & Citizen Discussion */}
+              <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
+                  <div>
+                    <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#64748b" }}>
+                      Community Verification & Trust
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: "700", color: "#166534", background: "#dcfce7", padding: "2px 8px", borderRadius: "10px", border: "1px solid #bbf7d0" }}>
+                        👍 {selectedIssue.upvotes_count || 0} Citizens Verified
+                      </span>
+                      <span style={{ fontSize: "12px", fontWeight: "700", color: "#991b1b", background: "#fee2e2", padding: "2px 8px", borderRadius: "10px", border: "1px solid #fecaca" }}>
+                        👎 {selectedIssue.downvotes_count || 0} Flagged
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleDuplicate(selectedIssue.id, selectedIssue.is_duplicate)}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "6px",
+                      border: selectedIssue.is_duplicate ? "1px solid #eab308" : "1px solid #cbd5e1",
+                      background: selectedIssue.is_duplicate ? "#fef9c3" : "#ffffff",
+                      color: selectedIssue.is_duplicate ? "#854d0e" : "#475569",
+                      fontWeight: "700",
+                      fontSize: "11px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <span>⚠️</span> {selectedIssue.is_duplicate ? "Duplicate Flagged (Click to Unlink)" : "Mark as Duplicate"}
+                  </button>
+                </div>
+
+                {/* Citizen Discussion Stream for Admin Review */}
+                <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "10px", marginTop: "10px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <strong style={{ fontSize: "12px", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span>💬</span> Ground Citizen Discussion ({adminComments.length})
+                    </strong>
+                    <span style={{ fontSize: "11px", color: "#64748b" }}>Review citizen updates before dispatch</span>
+                  </div>
+
+                  {adminCommentsLoading ? (
+                    <div style={{ padding: "10px", textAlign: "center", fontSize: "12px", color: "#64748b" }}>Loading comments...</div>
+                  ) : adminComments.length === 0 ? (
+                    <div style={{ padding: "10px", textAlign: "center", fontSize: "12px", color: "#94a3b8", background: "white", borderRadius: "6px", border: "1px dashed #cbd5e1" }}>
+                      No comments posted on this issue.
+                    </div>
+                  ) : (
+                    <div style={{ maxHeight: "160px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {adminComments.map((c) => (
+                        <div
+                          key={c.id}
+                          style={{
+                            padding: "8px 10px",
+                            background: "white",
+                            borderRadius: "6px",
+                            border: "1px solid #e2e8f0",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            gap: "8px",
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span style={{ fontSize: "11px", fontWeight: "700", color: "#0f172a" }}>
+                                {c.user_name || "Citizen"}
+                              </span>
+                              <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+                                {new Date(c.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                            <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#334155" }}>
+                              {c.comment}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteComment(c.id)}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "#dc2626",
+                              fontSize: "11px",
+                              cursor: "pointer",
+                              padding: "2px 4px",
+                            }}
+                            title="Moderate / Delete comment"
+                          >
+                            🗑️ Delete
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #e2e8f0", paddingTop: "14px" }}>
                 <div style={{ display: "flex", gap: "8px" }}>
                   {selectedIssue.status !== "In Progress" && (
@@ -1574,6 +1741,8 @@ function ComplaintTable({
             <th>Photo</th>
             <th>Issue / Location</th>
             <th>Department</th>
+            <th>Community Trust</th>
+            <th>Discussion</th>
             <th>Date</th>
             <th>Status</th>
             <th>Action</th>
@@ -1642,6 +1811,47 @@ function ComplaintTable({
                       </option>
                     ))}
                   </select>
+                </td>
+
+                <td>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                      <span style={{ fontSize: "11px", fontWeight: "700", color: "#166534", background: "#dcfce7", padding: "2px 6px", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
+                        👍 {issue.upvotes_count || 0}
+                      </span>
+                      <span style={{ fontSize: "11px", fontWeight: "700", color: "#991b1b", background: "#fee2e2", padding: "2px 6px", borderRadius: "8px", border: "1px solid #fecaca" }}>
+                        👎 {issue.downvotes_count || 0}
+                      </span>
+                    </div>
+                    {issue.is_duplicate && (
+                      <span style={{ fontSize: "10px", fontWeight: "800", color: "#854d0e", background: "#fef9c3", border: "1px solid #fef08a", padding: "1px 5px", borderRadius: "4px" }}>
+                        ⚠️ Duplicate
+                      </span>
+                    )}
+                  </div>
+                </td>
+
+                <td>
+                  <button
+                    type="button"
+                    onClick={() => onSelectIssue && onSelectIssue(issue)}
+                    style={{
+                      background: "#f1f5f9",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "6px",
+                      padding: "3px 8px",
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      color: "#334155",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                    title="View citizen comments"
+                  >
+                    <span>💬</span> {issue.comments_count || 0}
+                  </button>
                 </td>
 
                 <td>{formatDate(issue.created_at)}</td>
