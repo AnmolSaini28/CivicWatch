@@ -346,6 +346,52 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
     }
   };
 
+  // Part 3: Modal Citizen Discussion Comments state
+  const [modalComments, setModalComments] = useState([]);
+  const [modalCommentText, setModalCommentText] = useState("");
+  const [modalCommentPosting, setModalCommentPosting] = useState(false);
+
+  const loadModalComments = async (issueId) => {
+    try {
+      const res = await axios.get(`${API}/issues/${issueId}/comments`);
+      setModalComments(res.data || []);
+    } catch {
+      setModalComments([]);
+    }
+  };
+
+  const handlePostModalComment = async (e) => {
+    e.preventDefault();
+    if (!currentUser?.id || !selectedIssue?.id) return;
+    const text = modalCommentText.trim();
+    if (!text) return;
+    setModalCommentPosting(true);
+    try {
+      const res = await axios.post(`${API}/issues/${selectedIssue.id}/comments`, {
+        userId: currentUser.id,
+        comment: text,
+      });
+      setModalComments((prev) => [...prev, res.data]);
+      setModalCommentText("");
+      setSelectedIssue((prev) => ({
+        ...prev,
+        comments_count: (Number(prev?.comments_count) || 0) + 1,
+      }));
+    } catch (err) {
+      alert(err.response?.data?.error || "Could not post comment.");
+    } finally {
+      setModalCommentPosting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedIssue?.id) {
+      loadModalComments(selectedIssue.id);
+    } else {
+      setModalComments([]);
+    }
+  }, [selectedIssue?.id]);
+
   useEffect(() => {
     loadUserIssues();
     loadNotifications();
@@ -1288,6 +1334,41 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                             title="Flag as Duplicate or Fake (Downvote)"
                           >
                             <span>👎</span> {n.downvotes_count || 0}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedIssue({
+                                id: n.issue_id,
+                                tracking_id: n.tracking_id,
+                                title: n.title,
+                                description: n.message,
+                                category: n.category,
+                                status: n.status,
+                                upvotes_count: n.upvotes_count,
+                                downvotes_count: n.downvotes_count,
+                                is_duplicate: n.is_duplicate,
+                                comments_count: n.comments_count,
+                              });
+                            }}
+                            style={{
+                              background: "#f1f5f9",
+                              border: "1px solid #cbd5e1",
+                              color: "#334155",
+                              borderRadius: "6px",
+                              padding: "4px 8px",
+                              fontSize: "11px",
+                              fontWeight: "700",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                            title="Open Citizen Discussion"
+                          >
+                            <span>💬</span> {n.comments_count || 0}
                           </button>
 
                           {n.is_duplicate && (
@@ -2587,6 +2668,200 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                     </span>
                   </div>
                 )}
+
+                {/* Part 2 & 3: Community Verification & Citizen Discussion */}
+                <div style={{ marginTop: "12px", padding: "14px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
+                    <div>
+                      <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#64748b" }}>
+                        Community Verification
+                      </span>
+                      <div style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>
+                        {selectedIssue.upvotes_count || 0} Citizens Verified • {selectedIssue.downvotes_count || 0} Flagged
+                      </div>
+                    </div>
+                    {selectedIssue.is_duplicate && (
+                      <span style={{ fontSize: "11px", fontWeight: "800", color: "#854d0e", background: "#fef9c3", border: "1px solid #fef08a", padding: "3px 8px", borderRadius: "4px" }}>
+                        ⚠️ Merged Duplicate Issue
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", gap: "10px", marginBottom: "14px" }}>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!currentUser?.id || !selectedIssue?.id) return;
+                        try {
+                          const res = await axios.post(`${API}/issues/${selectedIssue.id}/vote`, {
+                            userId: currentUser.id,
+                            voteType: "upvote",
+                          });
+                          setSelectedIssue((prev) => ({
+                            ...prev,
+                            upvotes_count: res.data.upvotes_count,
+                            downvotes_count: res.data.downvotes_count,
+                            userVote: res.data.userVote,
+                          }));
+                        } catch {
+                          alert("Could not register vote.");
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        borderRadius: "6px",
+                        border: selectedIssue.userVote === "upvote" ? "1px solid #16a34a" : "1px solid #cbd5e1",
+                        background: selectedIssue.userVote === "upvote" ? "#dcfce7" : "#ffffff",
+                        color: selectedIssue.userVote === "upvote" ? "#15803d" : "#334155",
+                        fontWeight: "700",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <span>👍</span> {selectedIssue.userVote === "upvote" ? "Verified by You" : "Verify (Upvote)"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!currentUser?.id || !selectedIssue?.id) return;
+                        try {
+                          const res = await axios.post(`${API}/issues/${selectedIssue.id}/vote`, {
+                            userId: currentUser.id,
+                            voteType: "downvote",
+                          });
+                          setSelectedIssue((prev) => ({
+                            ...prev,
+                            upvotes_count: res.data.upvotes_count,
+                            downvotes_count: res.data.downvotes_count,
+                            userVote: res.data.userVote,
+                          }));
+                        } catch {
+                          alert("Could not register flag.");
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        borderRadius: "6px",
+                        border: selectedIssue.userVote === "downvote" ? "1px solid #dc2626" : "1px solid #cbd5e1",
+                        background: selectedIssue.userVote === "downvote" ? "#fee2e2" : "#ffffff",
+                        color: selectedIssue.userVote === "downvote" ? "#b91c1c" : "#334155",
+                        fontWeight: "700",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <span>👎</span> {selectedIssue.userVote === "downvote" ? "Flagged by You" : "Flag Duplicate/Fake"}
+                    </button>
+                  </div>
+
+                  {/* Citizen Discussion Feed */}
+                  <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                      <span style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span>💬</span> Citizen Discussion ({modalComments.length})
+                      </span>
+                      <span style={{ fontSize: "11px", color: "#64748b" }}>Live neighborhood updates</span>
+                    </div>
+
+                    <div style={{ maxHeight: "200px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+                      {modalComments.length === 0 ? (
+                        <div style={{ padding: "14px", textAlign: "center", color: "#94a3b8", fontSize: "12px", background: "white", borderRadius: "6px", border: "1px dashed #cbd5e1" }}>
+                          No comments yet. Share an update on this complaint!
+                        </div>
+                      ) : (
+                        modalComments.map((c) => (
+                          <div
+                            key={c.id}
+                            style={{
+                              padding: "8px 10px",
+                              background: "white",
+                              borderRadius: "6px",
+                              border: "1px solid #e2e8f0",
+                              display: "flex",
+                              gap: "8px",
+                              alignItems: "flex-start",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                borderRadius: "50%",
+                                background: "#082f26",
+                                color: "#a7f3d0",
+                                fontWeight: "700",
+                                fontSize: "11px",
+                                display: "grid",
+                                placeItems: "center",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {c.user_name ? c.user_name.charAt(0).toUpperCase() : "C"}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <span style={{ fontSize: "11px", fontWeight: "700", color: "#0f172a" }}>
+                                  {c.user_name || "Citizen"}
+                                </span>
+                                <span style={{ fontSize: "9px", color: "#94a3b8" }}>
+                                  {new Date(c.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                </span>
+                              </div>
+                              <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#334155" }}>
+                                {c.comment}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <form onSubmit={handlePostModalComment} style={{ display: "flex", gap: "8px" }}>
+                      <input
+                        type="text"
+                        value={modalCommentText}
+                        onChange={(e) => setModalCommentText(e.target.value)}
+                        placeholder="Write a comment..."
+                        disabled={modalCommentPosting}
+                        style={{
+                          flex: 1,
+                          padding: "8px 10px",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "12px",
+                          background: "white",
+                        }}
+                      />
+                      <button
+                        type="submit"
+                        disabled={!modalCommentText.trim() || modalCommentPosting}
+                        style={{
+                          background: modalCommentText.trim() ? "#082f26" : "#cbd5e1",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          padding: "6px 14px",
+                          fontSize: "12px",
+                          fontWeight: "700",
+                          cursor: modalCommentText.trim() ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        {modalCommentPosting ? "..." : "Send"}
+                      </button>
+                    </form>
+                  </div>
+                </div>
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #e2e8f0", paddingTop: "14px", marginTop: "18px" }}>
