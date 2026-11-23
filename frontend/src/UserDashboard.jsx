@@ -12,6 +12,7 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./admin.css";
+import { translations, translateStatus, translateCategory, translateAuthority, translatePrivacy, translateGender } from "./translations";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
@@ -169,7 +170,22 @@ function getDistanceKm(lat1, lon1, lat2, lon2) {
   return Number((R * c).toFixed(1));
 }
 
-export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate }) {
+export default function UserDashboard({
+  user,
+  onLogout,
+  onNavigate,
+  onUserUpdate,
+  language: propLang,
+  setLanguage: propSetLang,
+}) {
+  const [internalLang, setInternalLang] = useState(() => localStorage.getItem("cw_language") === "hi" ? "hi" : "en");
+  const language = propLang || internalLang;
+  const changeLanguage = (newLang) => {
+    localStorage.setItem("cw_language", newLang);
+    setInternalLang(newLang);
+    if (propSetLang) propSetLang(newLang);
+  };
+  const t = (key) => translations[language]?.[key] ?? translations.en[key] ?? key;
   const [currentUser, setCurrentUser] = useState(() => user || JSON.parse(localStorage.getItem("cw_session") || "{}"));
 
   const getInitialTab = () => {
@@ -870,27 +886,27 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
           <div className="cw-brand-icon">CW</div>
           <div>
             <strong>CivicWatch</strong>
-            <span style={{ color: "#86efac", fontWeight: "700" }}>CITIZEN PORTAL</span>
+            <span style={{ color: "#86efac", fontWeight: "700" }}>{t("citizenPortal")}</span>
           </div>
         </div>
 
         <nav className="cw-navigation">
           {[
-            ["My Dashboard", "▦"],
-            ["Report a Problem", "✎"],
-            ["My Reports", "▤"],
-            ["My Locations", "⌖"],
-            ["Global Map", "🗺️"],
-            ["Profile & Settings", "⚙"],
-            ["Help & FAQs", "❓"],
-          ].map(([name, icon]) => (
+            ["My Dashboard", "▦", t("myDashboard")],
+            ["Report a Problem", "✎", t("reportProblemTab")],
+            ["My Reports", "▤", t("myReportsTab")],
+            ["My Locations", "⌖", t("myLocationsTab")],
+            ["Global Map", "🗺️", t("globalMapTab")],
+            ["Profile & Settings", "⚙", t("profileSettingsTab")],
+            ["Help & FAQs", "❓", t("helpFaqsTab")],
+          ].map(([name, icon, label]) => (
             <button
               key={name}
               className={activePage === name ? "active" : ""}
               onClick={() => switchTab(name)}
             >
               <span>{icon}</span>
-              {name}
+              {label}
             </button>
           ))}
         </nav>
@@ -903,13 +919,13 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
             <div>
               <strong>{currentUser?.name || "Citizen"}</strong>
               <span style={{ color: "#d1fae5" }}>
-                Verified Citizen • {currentUser?.city || "Mumbai"}
+                {t("verifiedCitizen")} • {currentUser?.city || "Mumbai"}
               </span>
             </div>
           </div>
 
           <button className="cw-logout" onClick={onLogout} title="Log out from CivicWatch">
-            ↪ Logout
+            ↪ {t("logout")}
           </button>
 
           {onNavigate && (
@@ -922,7 +938,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 border: "1px solid rgba(255,255,255,0.2)",
               }}
             >
-              ← Public Home
+              ← {t("publicHome")}
             </button>
           )}
         </div>
@@ -934,7 +950,15 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
         <header className="cw-header">
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-              <h1>{activePage}</h1>
+              <h1>
+                {activePage === "My Dashboard" ? t("myDashboard") :
+                 activePage === "Report a Problem" ? t("reportProblemTab") :
+                 activePage === "My Reports" ? t("myReportsTab") :
+                 activePage === "My Locations" ? t("myLocationsTab") :
+                 activePage === "Global Map" ? t("globalMapTab") :
+                 activePage === "Profile & Settings" ? t("profileSettingsTab") :
+                 activePage === "Help & FAQs" ? t("helpFaqsTab") : activePage}
+              </h1>
               <span
                 style={{
                   fontSize: "11px",
@@ -947,7 +971,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   border: "1px solid #bbf7d0",
                 }}
               >
-                🏙️ CITIZEN: {currentUser?.city || "MUMBAI"}, {currentUser?.state || "MAHARASHTRA"}
+                🏙️ {t("citizenRole")}: {currentUser?.city || "MUMBAI"}, {currentUser?.state || "MAHARASHTRA"}
               </span>
               {stats.anonymous > 0 && (
                 <span
@@ -961,24 +985,47 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                     border: "1px solid #a7f3d0",
                   }}
                 >
-                  🛡️ {stats.anonymous} Anonymous Reports
+                  🛡️ {stats.anonymous} {t("anonymousReportsCount")}
                 </span>
               )}
             </div>
-            <p>Empowering citizens to report, track, and improve civic infrastructure</p>
+            <p>{t("dashboardSubtitle")}</p>
           </div>
 
           <div className="cw-header-actions">
+            {/* Language Switcher */}
+            <div style={{ position: "relative" }}>
+              <select
+                aria-label="Language"
+                value={language}
+                onChange={(e) => changeLanguage(e.target.value)}
+                style={{
+                  background: "#082f26",
+                  color: "#ffffff",
+                  border: "1px solid #16a34a",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  fontSize: "12px",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              >
+                <option value="en" style={{ background: "#082f26", color: "white" }}>English</option>
+                <option value="hi" style={{ background: "#082f26", color: "white" }}>हिन्दी</option>
+              </select>
+            </div>
+
             <button
               className="cw-refresh"
               onClick={() => {
                 loadUserIssues();
                 loadNotifications();
-                setSuccess("Data refreshed.");
+                setSuccess(language === "hi" ? "डेटा रीफ़्रेश हो गया।" : "Data refreshed.");
               }}
               disabled={loading}
             >
-              ↻ Refresh
+              ↻ {t("refresh")}
             </button>
 
             {/* Part 1: Notification Bell & Nearby Alerts Dropdown */}
@@ -1005,7 +1052,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 title="10km Radius Nearby Civic Alerts"
               >
                 <span style={{ fontSize: "16px" }}>🔔</span>
-                <span style={{ fontSize: "12px", display: "inline-block" }}>Alerts</span>
+                <span style={{ fontSize: "12px", display: "inline-block" }}>{t("alerts")}</span>
                 {unreadCount > 0 && (
                   <span
                     style={{
@@ -1159,7 +1206,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               onClick={onLogout}
               title="Logout of Citizen Portal"
             >
-              ↪ Logout
+              ↪ {t("logout")}
             </button>
           </div>
         </header>
@@ -1183,10 +1230,10 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             {/* Stat Counters */}
             <div className="cw-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "14px" }}>
-              <StatCard label="Total Reports" value={stats.total} color="green" icon="▤" />
-              <StatCard label="Pending Action" value={stats.pending} color="orange" icon="◷" />
-              <StatCard label="In Progress" value={stats.inProgress} color="blue" icon="↻" />
-              <StatCard label="Resolved" value={stats.resolved} color="purple" icon="✓" />
+              <StatCard label={t("totalComplaints")} value={stats.total} color="green" icon="▤" />
+              <StatCard label={t("pending")} value={stats.pending} color="orange" icon="◷" />
+              <StatCard label={t("inProgress")} value={stats.inProgress} color="blue" icon="↻" />
+              <StatCard label={t("resolved")} value={stats.resolved} color="purple" icon="✓" />
             </div>
 
             {/* Quick Banner */}
@@ -1217,13 +1264,13 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                     textTransform: "uppercase",
                   }}
                 >
-                  Citizen Action Hub
+                  {language === "hi" ? "नागरिक एक्शन हब" : "Citizen Action Hub"}
                 </span>
                 <h2 style={{ margin: "8px 0 6px", fontSize: "20px", color: "white" }}>
-                  Noticed a civic issue in your neighborhood?
+                  {language === "hi" ? "क्या आपने अपने क्षेत्र में कोई नागरिक समस्या देखी?" : "Noticed a civic issue in your neighborhood?"}
                 </h2>
                 <p style={{ margin: "0", color: "#d1fae5", fontSize: "13px", lineHeight: "1.5" }}>
-                  Report potholes, waste dumps, broken street lights, or water leaks in under 60 seconds. You can choose to remain 100% anonymous.
+                  {language === "hi" ? "सड़क के गड्ढे, कचरे के ढेर, खराब स्ट्रीट लाइट या पानी के रिसाव की रिपोर्ट 60 सेकंड में करें। आप 100% गुमनाम भी रह सकते हैं।" : "Report potholes, waste dumps, broken street lights, or water leaks in under 60 seconds. You can choose to remain 100% anonymous."}
                 </p>
               </div>
               <button
@@ -1243,7 +1290,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
                 }}
               >
-                <span>✎</span> File a Complaint Now
+                <span>✎</span> {language === "hi" ? "अभी शिकायत दर्ज करें" : "File a Complaint Now"}
               </button>
             </div>
 
@@ -1290,7 +1337,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                       transition: "all 0.15s ease",
                     }}
                   >
-                    <span>📋</span> All Reports ({globalIssues.length})
+                    <span>📋</span> {t("allReports")} ({globalIssues.length})
                   </button>
 
                   <button
@@ -1312,7 +1359,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                       transition: "all 0.15s ease",
                     }}
                   >
-                    <span>🚨</span> Alert Reports ({notifications.length})
+                    <span>🚨</span> {t("alertReports")} ({notifications.length})
                     {unreadCount > 0 && (
                       <span
                         style={{
@@ -1386,7 +1433,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 }}
               >
                 <span style={{ fontSize: "12px", fontWeight: "700", color: "#475569", display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span>🔍</span> Filter:
+                  <span>🔍</span> {language === "hi" ? "फ़िल्टर:" : "Filter:"}
                 </span>
 
                 {/* 1. Status Filter */}
@@ -1404,10 +1451,10 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                     cursor: "pointer",
                   }}
                 >
-                  <option value="All">All Statuses</option>
-                  <option value="Pending">Pending</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Resolved">Resolved</option>
+                  <option value="All">{t("filterAllStatus")}</option>
+                  <option value="Pending">{t("pending")}</option>
+                  <option value="In Progress">{t("inProgress")}</option>
+                  <option value="Resolved">{t("resolved")}</option>
                 </select>
 
                 {/* 2. Category Filter */}
@@ -1425,10 +1472,10 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                     cursor: "pointer",
                   }}
                 >
-                  <option value="All">All Categories</option>
+                  <option value="All">{t("filterAllCategories")}</option>
                   {CATEGORIES.map((cat) => (
                     <option key={cat} value={cat}>
-                      {cat}
+                      {translateCategory(cat, language)}
                     </option>
                   ))}
                 </select>
@@ -1448,9 +1495,9 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                     cursor: "pointer",
                   }}
                 >
-                  <option value="All">All Privacy</option>
-                  <option value="Registered">Registered Citizen</option>
-                  <option value="Anonymous">Anonymous (Protected)</option>
+                  <option value="All">{t("filterAllPrivacy")}</option>
+                  <option value="Registered">{t("filterPrivacyRegistered")}</option>
+                  <option value="Anonymous">{t("filterPrivacyAnonymous")}</option>
                 </select>
 
                 {/* 4. Distance Filter (1, 2, 5, 10, All, Custom) */}
@@ -1468,12 +1515,12 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                     cursor: "pointer",
                   }}
                 >
-                  <option value="All">All Distance</option>
-                  <option value="1">Within 1 km</option>
-                  <option value="2">Within 2 km</option>
-                  <option value="5">Within 5 km</option>
-                  <option value="10">Within 10 km</option>
-                  <option value="custom">Custom Distance...</option>
+                  <option value="All">{t("filterAllDistance")}</option>
+                  <option value="1">{t("filterWithin1km")}</option>
+                  <option value="2">{t("filterWithin2km")}</option>
+                  <option value="5">{t("filterWithin5km")}</option>
+                  <option value="10">{t("filterWithin10km")}</option>
+                  <option value="custom">{t("filterCustomKm")}</option>
                 </select>
 
                 {/* Custom manual distance input */}
@@ -1521,7 +1568,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                       marginLeft: "auto",
                     }}
                   >
-                    Reset Filters
+                    {language === "hi" ? "फ़िल्टर रीसेट करें" : "Reset Filters"}
                   </button>
                 )}
               </div>
@@ -1540,7 +1587,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   }}
                 >
                   <div style={{ fontSize: "28px", marginBottom: "6px" }}>🔍</div>
-                  <b>No reports found matching your selected criteria.</b>
+                  <b>{language === "hi" ? "आपके चयनित मानदंडों से कोई रिपोर्ट मेल नहीं खाती।" : "No reports found matching your selected criteria."}</b>
                   <p style={{ margin: "4px 0 0", fontSize: "12px" }}>
                     Try switching between "All Reports" and "Alert Reports", or clearing the distance/status filters.
                   </p>
@@ -1622,7 +1669,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                                   color: "#065f46",
                                 }}
                               >
-                                {report.category || "Civic"}
+                                {translateCategory(report.category, language) || (language === "hi" ? "नागरिक" : "Civic")}
                               </span>
                               {dist !== null && (
                                 <span style={{ fontSize: "11px", fontWeight: "700", color: "#0b3d2e", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "1px 6px", borderRadius: "4px" }}>
@@ -1631,7 +1678,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                               )}
                             </div>
                             <span className={`cw-badge ${String(status).toLowerCase().replace(/\s+/g, "-")}`} style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "8px" }}>
-                              {status}
+                              {translateStatus(status, language)}
                             </span>
                           </div>
 
@@ -1798,7 +1845,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                               cursor: "pointer",
                             }}
                           >
-                            View Report →
+                            {t("view")} →
                           </button>
                         </div>
                       </div>
@@ -1814,17 +1861,17 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               <div style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "18px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
                   <span style={{ fontSize: "18px" }}>📢</span>
-                  <h3 style={{ margin: 0, fontSize: "14px", color: "#0b3d2e" }}>Civic Notice Board</h3>
+                  <h3 style={{ margin: 0, fontSize: "14px", color: "#0b3d2e" }}>{t("civicNoticeBoard")}</h3>
                 </div>
                 <div style={{ fontSize: "12px", color: "#475569", lineHeight: "1.5" }}>
                   <div style={{ padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
-                    <b>Drainage De-silting Drive:</b> Special desilting teams active in Powai & S-Ward.
+                    <b>{t("notice1Title")}:</b> {t("notice1Desc")}
                   </div>
                   <div style={{ padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
-                    <b>Street Light LED Upgrade:</b> Report dim/flickering poles to Street Lighting Dept.
+                    <b>{t("notice2Title")}:</b> {t("notice2Desc")}
                   </div>
                   <div style={{ padding: "8px 0" }}>
-                    <b>Emergency Helpline:</b> BMC Disaster Management Room is 24x7 active at <b>1916</b>.
+                    <b>{t("notice3Title")}:</b> {t("notice3Desc")}
                   </div>
                 </div>
               </div>
@@ -1833,10 +1880,10 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "18px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
                   <span style={{ fontSize: "18px" }}>🛡️</span>
-                  <strong style={{ color: "#065f46", fontSize: "13px" }}>Identity Guard Active</strong>
+                  <strong style={{ color: "#065f46", fontSize: "13px" }}>{language === "hi" ? "पहचान सुरक्षा सक्रिय" : "Identity Guard Active"}</strong>
                 </div>
                 <p style={{ margin: 0, fontSize: "12px", color: "#166534", lineHeight: "1.4" }}>
-                  When anonymous reporting is toggled ON, your identity is cryptographically isolated from public maps and municipal officer consoles.
+                  {language === "hi" ? "जब गुमनाम रिपोर्टिंग चालू होती है, तो आपकी पहचान सार्वजनिक मानचित्रों और सरकारी अधिकारी कंसोल से पूरी तरह सुरक्षित रहती है।" : "When anonymous reporting is toggled ON, your identity is cryptographically isolated from public maps and municipal officer consoles."}
                 </p>
               </div>
             </div>
@@ -1849,9 +1896,9 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
         {activePage === "Report a Problem" && (
           <div className="cw-card" style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "24px" }}>
             <div style={{ marginBottom: "20px", borderBottom: "1px solid #f1f5f9", paddingBottom: "14px" }}>
-              <h2 style={{ margin: "0 0 6px", fontSize: "18px", color: "#0f172a" }}>File a New Complaint</h2>
+              <h2 style={{ margin: "0 0 6px", fontSize: "18px", color: "#0f172a" }}>{t("reportProblem")}</h2>
               <p style={{ margin: 0, color: "#64748b", fontSize: "13px" }}>
-                Provide exact location, category, responsible department, and photo proof for faster resolution.
+                {t("reportDescription")}
               </p>
             </div>
 
@@ -1860,21 +1907,21 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: "16px" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#1e293b", marginBottom: "6px" }}>
-                    Complaint Title *
+                    {t("complaintTitle")} *
                   </label>
                   <input
                     type="text"
                     value={complaint.title}
                     onChange={(e) => setComplaint({ ...complaint, title: e.target.value })}
                     maxLength={200}
-                    placeholder="e.g. Large pothole near Hiranandani Hospital signal"
+                    placeholder={t("complaintTitlePlaceholder")}
                     required
                     style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px" }}
                   />
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#1e293b", marginBottom: "6px" }}>
-                    Category *
+                    {t("category")} *
                   </label>
                   <select
                     value={complaint.category}
@@ -1895,7 +1942,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "16px" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#1e293b", marginBottom: "6px" }}>
-                    Forward to Authority / Department *
+                    {t("forwardAuthority")} *
                   </label>
                   <select
                     value={complaint.authority}
@@ -1912,7 +1959,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#1e293b", marginBottom: "6px" }}>
-                    Upload Photo Proof (Optional, max 5MB)
+                    {t("uploadPhoto")}
                   </label>
                   <input
                     type="file"
@@ -1932,12 +1979,12 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               {/* Row 3: Description */}
               <div>
                 <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#1e293b", marginBottom: "6px" }}>
-                  Detailed Description *
+                  {t("description")} *
                 </label>
                 <textarea
                   value={complaint.description}
                   onChange={(e) => setComplaint({ ...complaint, description: e.target.value })}
-                  placeholder="Explain the civic issue, landmarks, severity, and any hazards to traffic or pedestrians..."
+                  placeholder={t("descriptionPlaceholder")}
                   rows={3}
                   required
                   style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px", fontFamily: "inherit" }}
@@ -1948,7 +1995,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.2fr 0.8fr", gap: "12px" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#1e293b", marginBottom: "4px" }}>
-                    State *
+                    {t("state")} *
                   </label>
                   <input
                     type="text"
@@ -1960,7 +2007,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#1e293b", marginBottom: "4px" }}>
-                    City *
+                    {t("city")} *
                   </label>
                   <input
                     type="text"
@@ -1972,7 +2019,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#1e293b", marginBottom: "4px" }}>
-                    Area / Ward / Block *
+                    {t("block")} *
                   </label>
                   <input
                     type="text"
@@ -1985,7 +2032,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#1e293b", marginBottom: "4px" }}>
-                    Pincode
+                    {t("pincode")}
                   </label>
                   <input
                     type="text"
@@ -2003,10 +2050,10 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                   <div>
                     <label style={{ fontSize: "12px", fontWeight: "700", color: "#1e293b" }}>
-                      Pinpoint Location on Map *
+                      {t("chooseLocation")} *
                     </label>
                     <span style={{ fontSize: "11px", color: "#64748b", marginLeft: "8px" }}>
-                      Click on the map or drag the marker to adjust coordinates
+                      {t("locationInstructions")}
                     </span>
                   </div>
                   <button
@@ -2025,7 +2072,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                       gap: "5px",
                     }}
                   >
-                    📍 Use Current Location
+                    📍 {t("currentLocation")}
                   </button>
                 </div>
 
@@ -2054,7 +2101,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                         },
                       }}
                     >
-                      <Popup>Selected complaint spot</Popup>
+                      <Popup>{language === "hi" ? "चयनित शिकायत स्थान" : "Selected complaint spot"}</Popup>
                     </Marker>
                   </MapContainer>
                 </div>
@@ -2087,10 +2134,10 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 />
                 <label htmlFor="userAnonymousCheckbox" style={{ cursor: "pointer" }}>
                   <div style={{ fontWeight: "700", fontSize: "13px", color: "#065f46", display: "flex", alignItems: "center", gap: "6px" }}>
-                    🛡️ Report Anonymously (Identity Protected)
+                    🛡️ {t("anonymousReportTitle")}
                   </div>
                   <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#334155", lineHeight: "1.4" }}>
-                    Your name and contact details will NOT be shown to admins, government officers, or on public maps. This complaint will still appear securely in your personal Citizen Dashboard.
+                    {t("anonymousHelpLogged")}
                   </p>
                 </label>
               </div>
@@ -2121,7 +2168,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                     gap: "8px",
                   }}
                 >
-                  {submitting ? "Submitting..." : "Submit Complaint →"}
+                  {submitting ? t("submitting") : `${t("submitComplaint")} →`}
                 </button>
               </div>
             </form>
@@ -2135,7 +2182,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
           <div className="cw-card" style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "18px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
               <div>
-                <h2 style={{ margin: "0 0 4px", fontSize: "16px", color: "#0f172a" }}>All Submitted Complaints</h2>
+                <h2 style={{ margin: "0 0 4px", fontSize: "16px", color: "#0f172a" }}>{language === "hi" ? "सभी दर्ज शिकायतें" : "All Submitted Complaints"}</h2>
                 <span style={{ fontSize: "12px", color: "#64748b" }}>
                   Showing {filteredIssues.length} of {issues.length} complaints
                 </span>
@@ -2151,7 +2198,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   onClick={() => switchTab("Report a Problem")}
                   style={{ padding: "6px 14px", borderRadius: "6px", border: "none", background: "#0b3d2e", color: "white", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
                 >
-                  + New Report
+                  + {t("reportProblem")}
                 </button>
               </div>
             </div>
@@ -2173,7 +2220,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
             >
               <input
                 type="text"
-                placeholder="Search issue title, tracking ID, area..."
+                placeholder={language === "hi" ? "समस्या शीर्षक, ट्रैकिंग आईडी, क्षेत्र खोजें..." : "Search issue title, tracking ID, area..."}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{ flex: 1, minWidth: "220px", padding: "8px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px" }}
@@ -2206,7 +2253,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 onChange={(e) => setCategoryFilter(e.target.value)}
                 style={{ padding: "8px 10px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", background: "white" }}
               >
-                <option value="All">All Categories</option>
+                <option value="All">{language === "hi" ? "सभी श्रेणियां" : "All Categories"}</option>
                 {CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
                     {cat}
@@ -2219,7 +2266,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 onChange={(e) => setPrivacyFilter(e.target.value)}
                 style={{ padding: "8px 10px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", background: "white" }}
               >
-                <option value="All">All Privacy</option>
+                <option value="All">{language === "hi" ? "सभी गोपनीयता" : "All Privacy"}</option>
                 <option value="Anonymous">🛡️ Anonymous Only</option>
                 <option value="Registered">✓ Registered Only</option>
               </select>
@@ -2228,7 +2275,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
             {/* Reports Table */}
             {filteredIssues.length === 0 ? (
               <div style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
-                <p style={{ margin: "0 0 10px", fontSize: "14px" }}>No complaints match the selected filter criteria.</p>
+                <p style={{ margin: "0 0 10px", fontSize: "14px" }}>{language === "hi" ? "चयनित फ़िल्टर मानदंडों से कोई शिकायत मेल नहीं खाती।" : "No complaints match the selected filter criteria."}</p>
                 <button
                   onClick={() => {
                     setSearchTerm("");
@@ -2246,14 +2293,14 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 <table className="cw-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
                   <thead>
                     <tr style={{ background: "#f8fafc", textAlign: "left", borderBottom: "1px solid #e2e8e5" }}>
-                      <th style={{ padding: "10px" }}>Issue ID</th>
-                      <th style={{ padding: "10px" }}>Photo</th>
-                      <th style={{ padding: "10px" }}>Title & Location</th>
-                      <th style={{ padding: "10px" }}>Department</th>
-                      <th style={{ padding: "10px" }}>Date</th>
-                      <th style={{ padding: "10px" }}>Status</th>
-                      <th style={{ padding: "10px" }}>Privacy</th>
-                      <th style={{ padding: "10px" }}>Actions</th>
+                      <th style={{ padding: "10px" }}>{t("trackingId")}</th>
+                      <th style={{ padding: "10px" }}>{language === "hi" ? "फोटो" : "Photo"}</th>
+                      <th style={{ padding: "10px" }}>{language === "hi" ? "शीर्षक और स्थान" : "Title & Location"}</th>
+                      <th style={{ padding: "10px" }}>{t("department")}</th>
+                      <th style={{ padding: "10px" }}>{t("date")}</th>
+                      <th style={{ padding: "10px" }}>{t("status")}</th>
+                      <th style={{ padding: "10px" }}>{language === "hi" ? "गोपनीयता" : "Privacy"}</th>
+                      <th style={{ padding: "10px" }}>{t("action")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2271,7 +2318,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                               style={{ width: "36px", height: "36px", borderRadius: "4px", objectFit: "cover", cursor: "pointer", border: "1px solid #cbd5e1" }}
                             />
                           ) : (
-                            <span style={{ color: "#94a3b8", fontSize: "10px" }}>No photo</span>
+                            <span style={{ color: "#94a3b8", fontSize: "10px" }}>{language === "hi" ? "कोई फोटो नहीं" : "No photo"}</span>
                           )}
                         </td>
                         <td style={{ padding: "10px", maxWidth: "260px" }}>
@@ -2350,9 +2397,9 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
               {/* Saved Locations List */}
               <div className="cw-card" style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "20px" }}>
-                <h3 style={{ margin: "0 0 6px", fontSize: "16px", color: "#0f172a" }}>Frequently Reported Spots</h3>
+                <h3 style={{ margin: "0 0 6px", fontSize: "16px", color: "#0f172a" }}>{t("savedLocations")}</h3>
                 <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#64748b" }}>
-                  Save your home, workplace, or frequent neighborhoods for 1-click complaint dispatch.
+                  {t("savedLocationsSubtitle")}
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -2415,7 +2462,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
 
               {/* Add New Saved Location */}
               <div className="cw-card" style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "20px" }}>
-                <h3 style={{ margin: "0 0 6px", fontSize: "16px", color: "#0f172a" }}>Add a Favorite Place</h3>
+                <h3 style={{ margin: "0 0 6px", fontSize: "16px", color: "#0f172a" }}>{language === "hi" ? "पसंदीदा स्थान जोड़ें" : "Add a Favorite Place"}</h3>
                 <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#64748b" }}>
                   Quickly bookmark a locality to populate complaint addresses automatically.
                 </p>
@@ -2486,8 +2533,8 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
             <div className="cw-card" style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "20px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "15px", color: "#0f172a" }}>Your Reported Issues Map</h3>
-                  <span style={{ fontSize: "12px", color: "#64748b" }}>Live geocoded pins for your submitted issues & neighborhood</span>
+                  <h3 style={{ margin: 0, fontSize: "15px", color: "#0f172a" }}>{language === "hi" ? "आपकी दर्ज समस्याओं का नक्शा" : "Your Reported Issues Map"}</h3>
+                  <span style={{ fontSize: "12px", color: "#64748b" }}>{language === "hi" ? "आपकी दर्ज समस्याओं और पड़ोस के लाइव पिन" : "Live geocoded pins for your submitted issues & neighborhood"}</span>
                 </div>
                 <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                   <button
@@ -2706,7 +2753,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
           <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "20px" }}>
             {/* Personal Details Form */}
             <div className="cw-card" style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "20px" }}>
-              <h3 style={{ margin: "0 0 6px", fontSize: "16px", color: "#0f172a" }}>Citizen Profile</h3>
+              <h3 style={{ margin: "0 0 6px", fontSize: "16px", color: "#0f172a" }}>{t("profileSettings")}</h3>
               <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#64748b" }}>
                 Update your contact details and default municipal jurisdiction.
               </p>
@@ -2714,7 +2761,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               <form onSubmit={handleUpdateProfile} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
-                    Full Name *
+                    {t("fullName")} *
                   </label>
                   <input
                     type="text"
@@ -2728,7 +2775,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
-                      Email (Registered)
+                      {t("email")} ({language === "hi" ? "पंजीकृत" : "Registered"})
                     </label>
                     <input
                       type="email"
@@ -2739,7 +2786,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
-                      Mobile Number
+                      {t("mobileNumber")}
                     </label>
                     <input
                       type="text"
@@ -2753,22 +2800,22 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
-                      Gender
+                      {t("gender")}
                     </label>
                     <select
                       value={profileForm.gender}
                       onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}
                       style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", background: "white" }}
                     >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                      <option value="Prefer not to say">Prefer not to say</option>
+                      <option value="Male">{t("male")}</option>
+                      <option value="Female">{t("female")}</option>
+                      <option value="Other">{t("other")}</option>
+                      <option value="Prefer not to say">{t("preferNotToSay")}</option>
                     </select>
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
-                      City
+                      {t("city")}
                     </label>
                     <input
                       type="text"
@@ -2779,7 +2826,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
-                      State
+                      {t("state")}
                     </label>
                     <input
                       type="text"
@@ -2805,7 +2852,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                     marginTop: "6px",
                   }}
                 >
-                  {profileSaving ? "Saving..." : "Save Profile Details"}
+                  {profileSaving ? t("submitting") : t("saveProfile")}
                 </button>
 
                 {/* Part 1: Geolocation Coordinates & Detection */}
@@ -2870,11 +2917,11 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               {/* Change Password Card */}
               <div className="cw-card" style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "20px" }}>
-                <h3 style={{ margin: "0 0 6px", fontSize: "16px", color: "#0f172a" }}>Security & Password</h3>
+                <h3 style={{ margin: "0 0 6px", fontSize: "16px", color: "#0f172a" }}>{t("changePassword")}</h3>
                 <form onSubmit={handleUpdatePassword} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
-                      Current Password *
+                      {t("currentPassword")} *
                     </label>
                     <input
                       type="password"
@@ -2887,7 +2934,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
-                      New Password (min 8 chars) *
+                      {t("newPassword")} *
                     </label>
                     <input
                       type="password"
@@ -2901,7 +2948,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
-                      Confirm New Password *
+                      {t("confirmNewPassword")} *
                     </label>
                     <input
                       type="password"
@@ -2927,14 +2974,14 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                       marginTop: "4px",
                     }}
                   >
-                    {passwordSaving ? "Updating..." : "Update Password"}
+                    {passwordSaving ? t("submitting") : t("updatePassword")}
                   </button>
                 </form>
               </div>
 
               {/* Privacy Preferences Card */}
               <div className="cw-card" style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "18px" }}>
-                <h4 style={{ margin: "0 0 10px", fontSize: "13px", color: "#0f172a" }}>Default Privacy Settings</h4>
+                <h4 style={{ margin: "0 0 10px", fontSize: "13px", color: "#0f172a" }}>{language === "hi" ? "डिफ़ॉल्ट गोपनीयता सेटिंग्स" : "Default Privacy Settings"}</h4>
                 <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12px" }}>
                   <input
                     type="checkbox"
@@ -2946,7 +2993,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                     }}
                     style={{ accentColor: "#0b3d2e" }}
                   />
-                  <span>Always check "Report Anonymously" by default</span>
+                  <span>{language === "hi" ? "हमेशा डिफ़ॉल्ट रूप से \"गुमनाम रिपोर्ट करें\" चुनें" : "Always check \"Report Anonymously\" by default"}</span>
                 </label>
               </div>
             </div>
@@ -2960,7 +3007,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             {/* Search Header */}
             <div className="cw-card" style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "20px" }}>
-              <h2 style={{ margin: "0 0 6px", fontSize: "18px", color: "#0f172a" }}>Citizen Help Center & Knowledge Base</h2>
+              <h2 style={{ margin: "0 0 6px", fontSize: "18px", color: "#0f172a" }}>{language === "hi" ? "नागरिक सहायता केंद्र और ज्ञानकोश" : "Citizen Help Center & Knowledge Base"}</h2>
               <p style={{ margin: "0 0 14px", fontSize: "13px", color: "#64748b" }}>
                 Answers regarding anonymous reporting, resolution workflows, and municipal department escalations.
               </p>
@@ -3033,27 +3080,27 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "12px" }}>
                   <div style={{ padding: "8px 10px", background: "#fef2f2", borderRadius: "6px", display: "flex", justifyContent: "space-between" }}>
-                    <span>BMC Disaster Cell:</span>
+                    <span>{language === "hi" ? "आपदा प्रबंधन कक्ष:" : "BMC Disaster Cell:"}</span>
                     <b>1916</b>
                   </div>
                   <div style={{ padding: "8px 10px", background: "#fef2f2", borderRadius: "6px", display: "flex", justifyContent: "space-between" }}>
-                    <span>Fire Department:</span>
+                    <span>{language === "hi" ? "अग्निशमन विभाग:" : "Fire Department:"}</span>
                     <b>101</b>
                   </div>
                   <div style={{ padding: "8px 10px", background: "#fef2f2", borderRadius: "6px", display: "flex", justifyContent: "space-between" }}>
-                    <span>Police Control Room:</span>
+                    <span>{language === "hi" ? "पुलिस नियंत्रण कक्ष:" : "Police Control Room:"}</span>
                     <b>100</b>
                   </div>
                   <div style={{ padding: "8px 10px", background: "#fef2f2", borderRadius: "6px", display: "flex", justifyContent: "space-between" }}>
-                    <span>Traffic Police Helpline:</span>
+                    <span>{language === "hi" ? "यातायात पुलिस हेल्पलाइन:" : "Traffic Police Helpline:"}</span>
                     <b>8454999999</b>
                   </div>
                   <div style={{ padding: "8px 10px", background: "#fef2f2", borderRadius: "6px", display: "flex", justifyContent: "space-between" }}>
-                    <span>Childline Helpline:</span>
+                    <span>{language === "hi" ? "चाइल्डलाइन हेल्पलाइन:" : "Childline Helpline:"}</span>
                     <b>1098</b>
                   </div>
                   <div style={{ padding: "8px 10px", background: "#fef2f2", borderRadius: "6px", display: "flex", justifyContent: "space-between" }}>
-                    <span>Women Helpline:</span>
+                    <span>{language === "hi" ? "महिला हेल्पलाइन:" : "Women Helpline:"}</span>
                     <b>1090</b>
                   </div>
                 </div>
@@ -3103,7 +3150,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                       {selectedIssue.tracking_id}
                     </span>
                     <span className={`cw-badge ${String(selectedIssue.status || "pending").toLowerCase().replace(/\s+/g, "-")}`}>
-                      {selectedIssue.status}
+                      {translateStatus(selectedIssue.status, language)}
                     </span>
                     {selectedIssue.is_anonymous ? (
                       <span style={{ background: "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0", padding: "2px 8px", borderRadius: "10px", fontSize: "11px", fontWeight: "700" }}>
@@ -3127,7 +3174,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
 
               <div style={{ display: "flex", flexDirection: "column", gap: "14px", fontSize: "13px" }}>
                 <div>
-                  <b style={{ color: "#475569", display: "block", marginBottom: "4px" }}>Description:</b>
+                  <b style={{ color: "#475569", display: "block", marginBottom: "4px" }}>{t("description")}:</b>
                   <p style={{ margin: 0, color: "#1e293b", lineHeight: "1.5", background: "#f8fafc", padding: "10px", borderRadius: "6px" }}>
                     {selectedIssue.description}
                   </p>
@@ -3135,26 +3182,26 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", background: "#f8fafc", padding: "12px", borderRadius: "6px" }}>
                   <div>
-                    <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>Category</span>
-                    <b>{selectedIssue.category || "General"}</b>
+                    <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>{t("category")}</span>
+                    <b>{translateCategory(selectedIssue.category, language)}</b>
                   </div>
                   <div>
-                    <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>Assigned Authority</span>
-                    <b>{selectedIssue.department}</b>
+                    <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>{t("department")}</span>
+                    <b>{translateAuthority(selectedIssue.department, language)}</b>
                   </div>
                   <div>
-                    <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>Location</span>
+                    <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>{t("locationLabel")}</span>
                     <b>{[selectedIssue.block, selectedIssue.city, selectedIssue.state].filter(Boolean).join(", ")} {selectedIssue.pincode ? `(${selectedIssue.pincode})` : ""}</b>
                   </div>
                   <div>
-                    <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>Date Filed</span>
+                    <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>{t("dateSubmitted")}</span>
                     <b>{formatDate(selectedIssue.created_at)}</b>
                   </div>
                 </div>
 
                 {selectedIssue.photo_url && (
                   <div>
-                    <b style={{ color: "#475569", display: "block", marginBottom: "6px" }}>Evidence Photo:</b>
+                    <b style={{ color: "#475569", display: "block", marginBottom: "6px" }}>{language === "hi" ? "साक्ष्य फोटो:" : "Evidence Photo:"}</b>
                     <img
                       src={selectedIssue.photo_url.startsWith("http") ? selectedIssue.photo_url : `http://localhost:5001${selectedIssue.photo_url}`}
                       alt="Complaint evidence"
@@ -3165,7 +3212,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
 
                 {selectedIssue.latitude && selectedIssue.longitude && (
                   <div>
-                    <b style={{ color: "#475569", display: "block", marginBottom: "6px" }}>Location Coordinates:</b>
+                    <b style={{ color: "#475569", display: "block", marginBottom: "6px" }}>{t("coordinates")}:</b>
                     <span style={{ fontFamily: "monospace", color: "#0b3d2e", fontSize: "12px" }}>
                       Latitude: {selectedIssue.latitude}, Longitude: {selectedIssue.longitude}
                     </span>
@@ -3177,15 +3224,15 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
                     <div>
                       <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#64748b" }}>
-                        Community Verification
+                        {t("communityVerification")}
                       </span>
                       <div style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>
-                        {selectedIssue.upvotes_count || 0} Citizens Verified • {selectedIssue.downvotes_count || 0} Flagged
+                        {selectedIssue.upvotes_count || 0} {t("citizensVerified")} • {selectedIssue.downvotes_count || 0} {t("citizensFlagged")}
                       </div>
                     </div>
                     {selectedIssue.is_duplicate && (
                       <span style={{ fontSize: "11px", fontWeight: "800", color: "#854d0e", background: "#fef9c3", border: "1px solid #fef08a", padding: "3px 8px", borderRadius: "4px" }}>
-                        ⚠️ Merged Duplicate Issue
+                        ⚠️ {t("mergedDuplicateIssue")}
                       </span>
                     )}
                   </div>
@@ -3233,7 +3280,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                         gap: "6px",
                       }}
                     >
-                      <span>👍</span> {selectedIssue.userVote === "upvote" ? "Verified by You" : "Verify (Upvote)"}
+                      <span>👍</span> {selectedIssue.userVote === "upvote" ? t("verifiedByYou") : t("verifyIssue")}
                     </button>
 
                     <button
@@ -3278,7 +3325,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                         gap: "6px",
                       }}
                     >
-                      <span>👎</span> {selectedIssue.userVote === "downvote" ? "Flagged by You" : "Flag Duplicate/Fake"}
+                      <span>👎</span> {selectedIssue.userVote === "downvote" ? t("flaggedByYou") : t("flagIssue")}
                     </button>
                   </div>
 
@@ -3286,15 +3333,15 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "12px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                       <span style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span>💬</span> Citizen Discussion ({modalComments.length})
+                        <span>💬</span> {t("citizenDiscussion")} ({modalComments.length})
                       </span>
-                      <span style={{ fontSize: "11px", color: "#64748b" }}>Live neighborhood updates</span>
+                      <span style={{ fontSize: "11px", color: "#64748b" }}>{t("discussionSubtitle")}</span>
                     </div>
 
                     <div style={{ maxHeight: "200px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
                       {modalComments.length === 0 ? (
                         <div style={{ padding: "14px", textAlign: "center", color: "#94a3b8", fontSize: "12px", background: "white", borderRadius: "6px", border: "1px dashed #cbd5e1" }}>
-                          No comments yet. Share an update on this complaint!
+                          {t("noCommentsYet")}
                         </div>
                       ) : (
                         modalComments.map((c) => (
@@ -3349,7 +3396,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                         type="text"
                         value={modalCommentText}
                         onChange={(e) => setModalCommentText(e.target.value)}
-                        placeholder="Write a comment..."
+                        placeholder={language === "hi" ? "ज़मीनी स्थिति या टिप्पणी यहाँ लिखें..." : "Write a comment..."}
                         disabled={modalCommentPosting}
                         style={{
                           flex: 1,
@@ -3374,7 +3421,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                           cursor: modalCommentText.trim() ? "pointer" : "not-allowed",
                         }}
                       >
-                        {modalCommentPosting ? "..." : "Send"}
+                        {modalCommentPosting ? "..." : (language === "hi" ? "भेजें" : "Send")}
                       </button>
                     </form>
                   </div>
@@ -3388,7 +3435,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                       onClick={() => handleCancelIssue(selectedIssue.id)}
                       style={{ padding: "8px 14px", background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca", borderRadius: "6px", fontWeight: "700", cursor: "pointer", fontSize: "12px" }}
                     >
-                      Withdraw / Cancel Issue
+                      {t("withdrawComplaint")}
                     </button>
                   )}
                 </div>
@@ -3397,13 +3444,13 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                     onClick={() => window.print()}
                     style={{ padding: "8px 14px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "6px", fontWeight: "600", cursor: "pointer", fontSize: "12px" }}
                   >
-                    🖨️ Print Receipt
+                    {language === "hi" ? "🖨️ रसीद प्रिंट करें" : "🖨️ Print Receipt"}
                   </button>
                   <button
                     onClick={() => setSelectedIssue(null)}
                     style={{ padding: "8px 18px", background: "#0b3d2e", color: "white", border: "none", borderRadius: "6px", fontWeight: "700", cursor: "pointer", fontSize: "12px" }}
                   >
-                    Close
+                    {t("close")}
                   </button>
                 </div>
               </div>
