@@ -130,6 +130,24 @@ function LocationMapUpdater({ position }) {
   return null;
 }
 
+function GlobalMapViewport({ points }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!points || points.length === 0) return;
+    if (points.length === 1) {
+      map.setView(points[0], 14);
+      return;
+    }
+    try {
+      const bounds = L.latLngBounds(points);
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+    } catch {
+      // ignore
+    }
+  }, [map, points]);
+  return null;
+}
+
 export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate }) {
   const [currentUser, setCurrentUser] = useState(() => user || JSON.parse(localStorage.getItem("cw_session") || "{}"));
 
@@ -142,7 +160,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
     if (match) {
       try {
         const decoded = decodeURIComponent(match[1]);
-        const valid = ["My Dashboard", "Report a Problem", "My Reports", "My Locations", "Profile & Settings", "Help & FAQs"];
+        const valid = ["My Dashboard", "Report a Problem", "My Reports", "My Locations", "Global Map", "Profile & Settings", "Help & FAQs"];
         if (valid.includes(decoded)) return decoded;
       } catch {
         // ignore
@@ -205,6 +223,51 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Global Platform Issues for Public Issue Map
+  const [globalIssues, setGlobalIssues] = useState([]);
+  const [globalLoading, setGlobalLoading] = useState(false);
+
+  const mappedGlobalIssues = useMemo(
+    () =>
+      globalIssues.filter((issue) => {
+        if (!issue.latitude || !issue.longitude) return false;
+        const lat = Number(issue.latitude);
+        const lng = Number(issue.longitude);
+        return !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+      }),
+    [globalIssues]
+  );
+
+  const globalPoints = useMemo(
+    () => mappedGlobalIssues.map((i) => [Number(i.latitude), Number(i.longitude)]),
+    [mappedGlobalIssues]
+  );
+
+  const loadGlobalIssues = async () => {
+    setGlobalLoading(true);
+    try {
+      const res = await axios.get(`${API}/issues`);
+      setGlobalIssues(res.data || []);
+    } catch (err) {
+      console.error("Load global issues error:", err);
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
+
+  const handleOpenGlobalIssue = async (issue) => {
+    let issueData = { ...issue };
+    if (currentUser?.id) {
+      try {
+        const vRes = await axios.get(`${API}/issues/${issue.id}/vote/${currentUser.id}`);
+        issueData.userVote = vRes.data?.userVote || null;
+      } catch {
+        issueData.userVote = null;
+      }
+    }
+    setSelectedIssue(issueData);
+  };
 
   // Filter & Search states for My Reports
   const [searchTerm, setSearchTerm] = useState("");
@@ -377,6 +440,13 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
         ...prev,
         comments_count: (Number(prev?.comments_count) || 0) + 1,
       }));
+      setGlobalIssues((prevList) =>
+        prevList.map((item) =>
+          item.id === selectedIssue.id
+            ? { ...item, comments_count: (Number(item.comments_count) || 0) + 1 }
+            : item
+        )
+      );
     } catch (err) {
       alert(err.response?.data?.error || "Could not post comment.");
     } finally {
@@ -394,6 +464,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
 
   useEffect(() => {
     loadUserIssues();
+    loadGlobalIssues();
     loadNotifications();
     const interval = setInterval(loadNotifications, 15000);
     return () => clearInterval(interval);
@@ -701,6 +772,7 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
             ["Report a Problem", "✎"],
             ["My Reports", "▤"],
             ["My Locations", "⌖"],
+            ["Global Map", "🗺️"],
             ["Profile & Settings", "⚙"],
             ["Help & FAQs", "❓"],
           ].map(([name, icon]) => (
@@ -2135,23 +2207,43 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               </div>
             </div>
 
-            {/* Interactive Map of User's Reported Issues */}
+            {/* Interactive Map of Reported Issues */}
             <div className="cw-card" style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
                 <div>
                   <h3 style={{ margin: 0, fontSize: "15px", color: "#0f172a" }}>Your Reported Issues Map</h3>
-                  <span style={{ fontSize: "12px", color: "#64748b" }}>Live geocoded pins for all issues you have submitted</span>
+                  <span style={{ fontSize: "12px", color: "#64748b" }}>Live geocoded pins for your submitted issues & neighborhood</span>
                 </div>
-                <div style={{ display: "flex", gap: "10px", fontSize: "11px" }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#f59e0b" }}></span> Pending
-                  </span>
-                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#2563eb" }}></span> In Progress
-                  </span>
-                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#16a34a" }}></span> Resolved
-                  </span>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  <button
+                    onClick={() => switchTab("Global Map")}
+                    style={{
+                      background: "#082f26",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      padding: "6px 12px",
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <span>🗺️</span> Open Full Global Map →
+                  </button>
+                  <div style={{ display: "flex", gap: "8px", fontSize: "11px" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span style={{ width: "9px", height: "9px", borderRadius: "50%", background: "#f59e0b" }}></span> Pending
+                    </span>
+                    <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span style={{ width: "9px", height: "9px", borderRadius: "50%", background: "#2563eb" }}></span> In Progress
+                    </span>
+                    <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span style={{ width: "9px", height: "9px", borderRadius: "50%", background: "#16a34a" }}></span> Resolved
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -2160,37 +2252,173 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   {issues
                     .filter((i) => i.latitude && i.longitude)
-                    .map((item) => {
-                      const color =
-                        String(item.status).toLowerCase() === "resolved"
-                          ? "#16a34a"
-                          : String(item.status).toLowerCase() === "in progress"
-                            ? "#2563eb"
-                            : "#f59e0b";
-                      return (
-                        <CircleMarker
-                          key={item.id}
-                          center={[Number(item.latitude), Number(item.longitude)]}
-                          radius={8}
-                          pathOptions={{ color, fillColor: color, fillOpacity: 0.85 }}
-                        >
-                          <Popup>
-                            <div style={{ fontSize: "12px" }}>
-                              <strong>{item.title}</strong>
-                              <div style={{ margin: "4px 0", color: "#64748b" }}>ID: {item.tracking_id}</div>
-                              <div>Status: <b>{item.status}</b></div>
-                              <button
-                                onClick={() => setSelectedIssue(item)}
-                                style={{ marginTop: "6px", padding: "3px 7px", fontSize: "10px", cursor: "pointer" }}
-                              >
-                                View Details
-                              </button>
+                    .map((item) => (
+                      <Marker
+                        key={item.id}
+                        position={[Number(item.latitude), Number(item.longitude)]}
+                      >
+                        <Popup>
+                          <div className="issue-popup" style={{ minWidth: "200px", maxWidth: "270px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                              <span style={{ fontSize: "11px", fontWeight: "700", color: "#065f46" }}>{item.category || "Issue"}</span>
+                              <span className={`cw-badge ${String(item.status || "pending").toLowerCase().replace(/\s+/g, "-")}`} style={{ fontSize: "9px", padding: "1px 6px" }}>
+                                {item.status}
+                              </span>
                             </div>
-                          </Popup>
-                        </CircleMarker>
-                      );
-                    })}
+                            <strong style={{ fontSize: "13px", color: "#0f172a", display: "block", marginBottom: "4px" }}>{item.title}</strong>
+                            <p style={{ margin: "0 0 6px", fontSize: "11px", color: "#475569", maxHeight: "36px", overflow: "hidden" }}>
+                              {item.description}
+                            </p>
+                            <div style={{ fontSize: "10px", color: "#64748b", marginBottom: "6px" }}>ID: {item.tracking_id}</div>
+                            <button
+                              type="button"
+                              className="map-popup-btn"
+                              onClick={() => handleOpenGlobalIssue(item)}
+                            >
+                              <span>🔍</span> View Full Report & Discuss →
+                            </button>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    ))}
                 </MapContainer>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* PAGE: GLOBAL MAP (ALL PUBLIC ISSUES) */}
+        {/* ==================================================== */}
+        {activePage === "Global Map" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div className="cw-card" style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                <div>
+                  <h2 style={{ margin: "0 0 4px", fontSize: "22px", color: "#0f172a", fontWeight: "800" }}>
+                    Public Issue Map
+                  </h2>
+                  <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+                    Explore public map
+                  </p>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span style={{ fontSize: "12px", background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0", padding: "5px 12px", borderRadius: "6px", fontWeight: "700" }}>
+                    📍 {mappedGlobalIssues.length} Mapped Reports
+                  </span>
+                  <button
+                    onClick={loadGlobalIssues}
+                    disabled={globalLoading}
+                    style={{
+                      background: "#082f26",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      padding: "7px 15px",
+                      fontSize: "12px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    ↻ {globalLoading ? "Refreshing..." : "Refresh Map"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Leaflet Global Map Container */}
+              <div style={{ height: "560px", width: "100%", borderRadius: "10px", overflow: "hidden", border: "1px solid #cbd5e1", position: "relative" }}>
+                <MapContainer
+                  center={[19.076, 72.8777]}
+                  zoom={12}
+                  minZoom={4}
+                  maxZoom={19}
+                  scrollWheelZoom={true}
+                  style={{ height: "100%", width: "100%" }}
+                >
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    maxZoom={19}
+                  />
+                  <GlobalMapViewport points={globalPoints} />
+                  {mappedGlobalIssues.map((issue) => (
+                    <Marker
+                      key={issue.id}
+                      position={[Number(issue.latitude), Number(issue.longitude)]}
+                    >
+                      <Popup>
+                        <div className="issue-popup" style={{ minWidth: "210px", maxWidth: "280px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexWrap: "wrap", gap: "4px" }}>
+                            <span style={{ fontSize: "11px", fontWeight: "800", textTransform: "uppercase", color: "#065f46", letterSpacing: "0.5px" }}>
+                              {issue.category || "Civic Issue"}
+                            </span>
+                            <span
+                              className={`cw-badge ${String(issue.status || "pending").toLowerCase().replace(/\s+/g, "-")}`}
+                              style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "10px" }}
+                            >
+                              {issue.status || "Pending"}
+                            </span>
+                          </div>
+
+                          <h4 style={{ margin: "2px 0 6px", fontSize: "14px", fontWeight: "700", color: "#0f172a", lineHeight: "1.3" }}>
+                            {issue.title || issue.category || "Reported Issue"}
+                          </h4>
+
+                          <p style={{ margin: "0 0 8px", fontSize: "12px", color: "#475569", lineHeight: "1.4", maxHeight: "42px", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {issue.description || "No description provided."}
+                          </p>
+
+                          <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "8px", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "11px", background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0", padding: "2px 6px", borderRadius: "4px", fontWeight: "700" }}>
+                              👍 {issue.upvotes_count || 0}
+                            </span>
+                            <span style={{ fontSize: "11px", background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", padding: "2px 6px", borderRadius: "4px", fontWeight: "700" }}>
+                              👎 {issue.downvotes_count || 0}
+                            </span>
+                            <span style={{ fontSize: "11px", background: "#f8fafc", color: "#475569", border: "1px solid #e2e8f0", padding: "2px 6px", borderRadius: "4px", fontWeight: "600" }}>
+                              💬 {issue.comments_count || 0}
+                            </span>
+                          </div>
+
+                          {issue.tracking_id && (
+                            <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "8px", fontFamily: "monospace" }}>
+                              <b>Tracking ID:</b> {issue.tracking_id}
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            className="map-popup-btn"
+                            onClick={() => handleOpenGlobalIssue(issue)}
+                          >
+                            <span>🔍</span> View Full Report, Vote & Discuss →
+                          </button>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  ))}
+                </MapContainer>
+              </div>
+
+              {/* Map Footer Summary */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "14px", flexWrap: "wrap", gap: "10px", fontSize: "12px", color: "#64748b" }}>
+                <div>
+                  Showing <b>{mappedGlobalIssues.length}</b> live civic reports across Mumbai & India.
+                </div>
+                <div style={{ display: "flex", gap: "14px" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span style={{ width: "9px", height: "9px", borderRadius: "50%", background: "#f59e0b" }}></span> Pending
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span style={{ width: "9px", height: "9px", borderRadius: "50%", background: "#2563eb" }}></span> In Progress
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span style={{ width: "9px", height: "9px", borderRadius: "50%", background: "#16a34a" }}></span> Resolved
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -2703,6 +2931,13 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                             downvotes_count: res.data.downvotes_count,
                             userVote: res.data.userVote,
                           }));
+                          setGlobalIssues((prevList) =>
+                            prevList.map((item) =>
+                              item.id === selectedIssue.id
+                                ? { ...item, upvotes_count: res.data.upvotes_count, downvotes_count: res.data.downvotes_count }
+                                : item
+                            )
+                          );
                         } catch {
                           alert("Could not register vote.");
                         }
@@ -2741,6 +2976,13 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                             downvotes_count: res.data.downvotes_count,
                             userVote: res.data.userVote,
                           }));
+                          setGlobalIssues((prevList) =>
+                            prevList.map((item) =>
+                              item.id === selectedIssue.id
+                                ? { ...item, upvotes_count: res.data.upvotes_count, downvotes_count: res.data.downvotes_count }
+                                : item
+                            )
+                          );
                         } catch {
                           alert("Could not register flag.");
                         }
