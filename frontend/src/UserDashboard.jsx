@@ -148,6 +148,27 @@ function GlobalMapViewport({ points }) {
   return null;
 }
 
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  if (lat1 === null || lat1 === undefined || lon1 === null || lon1 === undefined) return null;
+  if (lat2 === null || lat2 === undefined || lon2 === null || lon2 === undefined) return null;
+  const nLat1 = Number(lat1);
+  const nLon1 = Number(lon1);
+  const nLat2 = Number(lat2);
+  const nLon2 = Number(lon2);
+  if (isNaN(nLat1) || isNaN(nLon1) || isNaN(nLat2) || isNaN(nLon2)) return null;
+  const R = 6371; // Earth radius in km
+  const dLat = (nLat2 - nLat1) * (Math.PI / 180);
+  const dLon = (nLon2 - nLon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(nLat1 * (Math.PI / 180)) *
+      Math.cos(nLat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Number((R * c).toFixed(1));
+}
+
 export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate }) {
   const [currentUser, setCurrentUser] = useState(() => user || JSON.parse(localStorage.getItem("cw_session") || "{}"));
 
@@ -224,6 +245,49 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Notifications & 10km Nearby Citizen Alerts state
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
+
+  const loadNotifications = async () => {
+    if (!currentUser?.id) return;
+    setLoadingNotifs(true);
+    try {
+      const res = await axios.get(`${API}/notifications/${currentUser.id}`);
+      setNotifications(res.data.notifications || []);
+      setUnreadCount(res.data.unreadCount || 0);
+    } catch (err) {
+      console.error("Notifications fetch error:", err);
+    } finally {
+      setLoadingNotifs(false);
+    }
+  };
+
+  const markNotificationRead = async (notifId) => {
+    try {
+      await axios.put(`${API}/notifications/${notifId}/read`);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notifId ? { ...n, is_read: true } : n))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error("Mark notification read error:", err);
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    if (!currentUser?.id) return;
+    try {
+      await axios.put(`${API}/notifications/user/${currentUser.id}/read-all`);
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error("Mark all notifications read error:", err);
+    }
+  };
+
   // Global Platform Issues for Public Issue Map
   const [globalIssues, setGlobalIssues] = useState([]);
   const [globalLoading, setGlobalLoading] = useState(false);
@@ -268,6 +332,92 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
     }
     setSelectedIssue(issueData);
   };
+
+  // Dashboard reports view toggle & 4 filters (Status, Category, Privacy, Distance)
+  const [dashboardTab, setDashboardTab] = useState("all"); // "all" or "alerts"
+  const [dashStatusFilter, setDashStatusFilter] = useState("All");
+  const [dashCategoryFilter, setDashCategoryFilter] = useState("All");
+  const [dashPrivacyFilter, setDashPrivacyFilter] = useState("All");
+  const [dashDistanceFilter, setDashDistanceFilter] = useState("All");
+  const [dashCustomDistance, setDashCustomDistance] = useState("");
+
+  const maxDistanceKm = useMemo(() => {
+    if (dashDistanceFilter === "All") return null;
+    if (dashDistanceFilter === "custom") {
+      const val = parseFloat(dashCustomDistance);
+      return isNaN(val) || val <= 0 ? null : val;
+    }
+    const val = parseFloat(dashDistanceFilter);
+    return isNaN(val) ? null : val;
+  }, [dashDistanceFilter, dashCustomDistance]);
+
+  const filteredDashboardReports = useMemo(() => {
+    const userLat = currentUser?.latitude || 19.076;
+    const userLng = currentUser?.longitude || 72.8777;
+
+    if (dashboardTab === "all") {
+      return globalIssues.filter((issue) => {
+        // Status filter
+        if (dashStatusFilter !== "All" && String(issue.status || "Pending").toLowerCase() !== dashStatusFilter.toLowerCase()) {
+          return false;
+        }
+        // Category filter
+        if (dashCategoryFilter !== "All" && issue.category !== dashCategoryFilter) {
+          return false;
+        }
+        // Privacy filter
+        if (dashPrivacyFilter === "Anonymous" && !issue.is_anonymous) {
+          return false;
+        }
+        if (dashPrivacyFilter === "Registered" && issue.is_anonymous) {
+          return false;
+        }
+        // Distance filter
+        if (maxDistanceKm !== null) {
+          const dist = getDistanceKm(userLat, userLng, issue.latitude, issue.longitude);
+          if (dist === null || dist > maxDistanceKm) return false;
+        }
+        return true;
+      });
+    } else {
+      // Alert reports (notifications)
+      return notifications.filter((n) => {
+        // Status filter
+        if (dashStatusFilter !== "All" && String(n.status || "Pending").toLowerCase() !== dashStatusFilter.toLowerCase()) {
+          return false;
+        }
+        // Category filter
+        if (dashCategoryFilter !== "All" && n.category !== dashCategoryFilter) {
+          return false;
+        }
+        // Privacy filter
+        if (dashPrivacyFilter === "Anonymous" && !n.is_anonymous) {
+          return false;
+        }
+        if (dashPrivacyFilter === "Registered" && n.is_anonymous) {
+          return false;
+        }
+        // Distance filter
+        if (maxDistanceKm !== null) {
+          const dist = n.distance_km !== undefined && n.distance_km !== null
+            ? Number(n.distance_km)
+            : getDistanceKm(userLat, userLng, n.issue_lat, n.issue_lng);
+          if (dist === null || dist > maxDistanceKm) return false;
+        }
+        return true;
+      });
+    }
+  }, [
+    dashboardTab,
+    globalIssues,
+    notifications,
+    dashStatusFilter,
+    dashCategoryFilter,
+    dashPrivacyFilter,
+    maxDistanceKm,
+    currentUser?.latitude,
+    currentUser?.longitude,
+  ]);
 
   // Filter & Search states for My Reports
   const [searchTerm, setSearchTerm] = useState("");
@@ -366,48 +516,6 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
     }
   };
 
-  // Part 1: Notifications & 10km Nearby Citizen Alerts state
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
-  const [loadingNotifs, setLoadingNotifs] = useState(false);
-
-  const loadNotifications = async () => {
-    if (!currentUser?.id) return;
-    setLoadingNotifs(true);
-    try {
-      const res = await axios.get(`${API}/notifications/${currentUser.id}`);
-      setNotifications(res.data.notifications || []);
-      setUnreadCount(res.data.unreadCount || 0);
-    } catch (err) {
-      console.error("Notifications fetch error:", err);
-    } finally {
-      setLoadingNotifs(false);
-    }
-  };
-
-  const markNotificationRead = async (notifId) => {
-    try {
-      await axios.put(`${API}/notifications/${notifId}/read`);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === notifId ? { ...n, is_read: true } : n))
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-    } catch (err) {
-      console.error("Mark notification read error:", err);
-    }
-  };
-
-  const markAllNotificationsRead = async () => {
-    if (!currentUser?.id) return;
-    try {
-      await axios.put(`${API}/notifications/user/${currentUser.id}/read-all`);
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      setUnreadCount(0);
-    } catch (err) {
-      console.error("Mark all notifications read error:", err);
-    }
-  };
 
   // Part 3: Modal Citizen Discussion Comments state
   const [modalComments, setModalComments] = useState([]);
@@ -1139,68 +1247,91 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
               </button>
             </div>
 
-            {/* Part 1: Nearby Alerts Widget (<10km) */}
+            {/* Civic Reports & Alerts Hub with 2 Toggle Buttons and 4 Dropdown Filters */}
             <div
               className="cw-card"
               style={{
                 background: "white",
                 borderRadius: "10px",
                 border: "1px solid #e2e8e5",
-                padding: "18px",
+                padding: "20px",
                 boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
               }}
             >
+              {/* Top Row: 2 Buttons (All Reports / Alert Reports) & Refresh */}
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: "14px",
                   flexWrap: "wrap",
-                  gap: "10px",
+                  gap: "12px",
+                  paddingBottom: "14px",
+                  borderBottom: "1px solid #f1f5f9",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <div
+                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => setDashboardTab("all")}
                     style={{
-                      width: "36px",
-                      height: "36px",
+                      padding: "9px 18px",
                       borderRadius: "8px",
-                      background: "#ecfdf5",
-                      border: "1px solid #a7f3d0",
-                      color: "#065f46",
-                      display: "grid",
-                      placeItems: "center",
-                      fontSize: "18px",
+                      border: dashboardTab === "all" ? "2px solid #082f26" : "1px solid #cbd5e1",
+                      background: dashboardTab === "all" ? "#082f26" : "#ffffff",
+                      color: dashboardTab === "all" ? "#ffffff" : "#334155",
+                      fontWeight: "700",
+                      fontSize: "13px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      boxShadow: dashboardTab === "all" ? "0 2px 6px rgba(8, 47, 38, 0.2)" : "none",
+                      transition: "all 0.15s ease",
                     }}
                   >
-                    📡
-                  </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: "15px", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
-                      Nearby Citizen Alerts (Within 10 km Radius)
-                      {unreadCount > 0 && (
-                        <span
-                          style={{
-                            background: "#ef4444",
-                            color: "white",
-                            fontSize: "10px",
-                            fontWeight: "800",
-                            padding: "2px 8px",
-                            borderRadius: "999px",
-                          }}
-                        >
-                          {unreadCount} NEW
-                        </span>
-                      )}
-                    </h3>
-                    <span style={{ fontSize: "12px", color: "#64748b" }}>
-                      Real-time alerts broadcast to registered citizens living within 10 km
-                    </span>
-                  </div>
+                    <span>📋</span> All Reports ({globalIssues.length})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDashboardTab("alerts")}
+                    style={{
+                      padding: "9px 18px",
+                      borderRadius: "8px",
+                      border: dashboardTab === "alerts" ? "2px solid #082f26" : "1px solid #cbd5e1",
+                      background: dashboardTab === "alerts" ? "#082f26" : "#ffffff",
+                      color: dashboardTab === "alerts" ? "#ffffff" : "#334155",
+                      fontWeight: "700",
+                      fontSize: "13px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      boxShadow: dashboardTab === "alerts" ? "0 2px 6px rgba(8, 47, 38, 0.2)" : "none",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <span>🚨</span> Alert Reports ({notifications.length})
+                    {unreadCount > 0 && (
+                      <span
+                        style={{
+                          background: "#ef4444",
+                          color: "white",
+                          fontSize: "10px",
+                          fontWeight: "800",
+                          padding: "1px 6px",
+                          borderRadius: "999px",
+                        }}
+                      >
+                        {unreadCount} NEW
+                      </span>
+                    )}
+                  </button>
                 </div>
+
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  {unreadCount > 0 && (
+                  {dashboardTab === "alerts" && unreadCount > 0 && (
                     <button
                       type="button"
                       onClick={markAllNotificationsRead}
@@ -1209,8 +1340,8 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                         border: "1px solid #cbd5e1",
                         color: "#334155",
                         borderRadius: "6px",
-                        padding: "5px 10px",
-                        fontSize: "11px",
+                        padding: "6px 12px",
+                        fontSize: "12px",
                         fontWeight: "600",
                         cursor: "pointer",
                       }}
@@ -1220,7 +1351,11 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                   )}
                   <button
                     type="button"
-                    onClick={loadNotifications}
+                    onClick={() => {
+                      loadGlobalIssues();
+                      loadNotifications();
+                      setSuccess("Reports refreshed.");
+                    }}
                     style={{
                       background: "transparent",
                       border: "none",
@@ -1230,15 +1365,172 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                       fontSize: "12px",
                     }}
                   >
-                    ↻ Refresh Alerts
+                    ↻ Refresh
                   </button>
                 </div>
               </div>
 
-              {notifications.length === 0 ? (
+              {/* 4 Dropdown Filters Bar (Status, All Categories, All Privacy, Distance) */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "10px",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  padding: "12px 14px",
+                  background: "#f8fafc",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8e5",
+                  marginTop: "14px",
+                  marginBottom: "16px",
+                }}
+              >
+                <span style={{ fontSize: "12px", fontWeight: "700", color: "#475569", display: "flex", alignItems: "center", gap: "4px" }}>
+                  <span>🔍</span> Filter:
+                </span>
+
+                {/* 1. Status Filter */}
+                <select
+                  value={dashStatusFilter}
+                  onChange={(e) => setDashStatusFilter(e.target.value)}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "12px",
+                    background: "white",
+                    color: "#0f172a",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="Pending">Pending</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Resolved">Resolved</option>
+                </select>
+
+                {/* 2. Category Filter */}
+                <select
+                  value={dashCategoryFilter}
+                  onChange={(e) => setDashCategoryFilter(e.target.value)}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "12px",
+                    background: "white",
+                    color: "#0f172a",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="All">All Categories</option>
+                  {CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+
+                {/* 3. Privacy Filter */}
+                <select
+                  value={dashPrivacyFilter}
+                  onChange={(e) => setDashPrivacyFilter(e.target.value)}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "12px",
+                    background: "white",
+                    color: "#0f172a",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="All">All Privacy</option>
+                  <option value="Registered">Registered Citizen</option>
+                  <option value="Anonymous">Anonymous (Protected)</option>
+                </select>
+
+                {/* 4. Distance Filter (1, 2, 5, 10, All, Custom) */}
+                <select
+                  value={dashDistanceFilter}
+                  onChange={(e) => setDashDistanceFilter(e.target.value)}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "12px",
+                    background: "white",
+                    color: "#0f172a",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="All">All Distance</option>
+                  <option value="1">Within 1 km</option>
+                  <option value="2">Within 2 km</option>
+                  <option value="5">Within 5 km</option>
+                  <option value="10">Within 10 km</option>
+                  <option value="custom">Custom Distance...</option>
+                </select>
+
+                {/* Custom manual distance input */}
+                {dashDistanceFilter === "custom" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.5"
+                      placeholder="Enter km (e.g. 3)"
+                      value={dashCustomDistance}
+                      onChange={(e) => setDashCustomDistance(e.target.value)}
+                      style={{
+                        width: "120px",
+                        padding: "6px 8px",
+                        borderRadius: "6px",
+                        border: "1px solid #082f26",
+                        fontSize: "12px",
+                        background: "white",
+                      }}
+                    />
+                    <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748b" }}>km</span>
+                  </div>
+                )}
+
+                {/* Active filter count / Reset */}
+                {(dashStatusFilter !== "All" || dashCategoryFilter !== "All" || dashPrivacyFilter !== "All" || dashDistanceFilter !== "All" || dashCustomDistance) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDashStatusFilter("All");
+                      setDashCategoryFilter("All");
+                      setDashPrivacyFilter("All");
+                      setDashDistanceFilter("All");
+                      setDashCustomDistance("");
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "#b91c1c",
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      marginLeft: "auto",
+                    }}
+                  >
+                    Reset Filters
+                  </button>
+                )}
+              </div>
+
+              {/* Reports Stream */}
+              {filteredDashboardReports.length === 0 ? (
                 <div
                   style={{
-                    padding: "24px",
+                    padding: "36px 20px",
                     textAlign: "center",
                     background: "#f8fafc",
                     borderRadius: "8px",
@@ -1247,322 +1539,305 @@ export default function UserDashboard({ user, onLogout, onNavigate, onUserUpdate
                     fontSize: "13px",
                   }}
                 >
-                  <div style={{ fontSize: "24px", marginBottom: "4px" }}>✅</div>
-                  No active civic alerts reported within 10 km of your registered area. All clear!
+                  <div style={{ fontSize: "28px", marginBottom: "6px" }}>🔍</div>
+                  <b>No reports found matching your selected criteria.</b>
+                  <p style={{ margin: "4px 0 0", fontSize: "12px" }}>
+                    Try switching between "All Reports" and "Alert Reports", or clearing the distance/status filters.
+                  </p>
                 </div>
               ) : (
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                    gap: "12px",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))",
+                    gap: "14px",
                   }}
                 >
-                  {notifications.slice(0, 6).map((n) => (
-                    <div
-                      key={n.id}
-                      onClick={() => {
-                        if (!n.is_read) markNotificationRead(n.id);
-                      }}
-                      style={{
-                        background: n.is_read ? "#ffffff" : "#f0fdf4",
-                        border: n.is_read ? "1px solid #e2e8e5" : "1px solid #86efac",
-                        borderRadius: "8px",
-                        padding: "12px 14px",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "space-between",
-                        boxShadow: n.is_read ? "none" : "0 2px 6px rgba(34, 197, 94, 0.08)",
-                      }}
-                    >
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                          <span
-                            style={{
-                              fontSize: "10px",
-                              fontWeight: "800",
-                              textTransform: "uppercase",
-                              padding: "2px 7px",
-                              borderRadius: "4px",
-                              background: n.is_read ? "#e2e8f0" : "#dcfce7",
-                              color: n.is_read ? "#475569" : "#166534",
-                            }}
-                          >
-                            {n.category || "Civic"} • 📍 {n.distance_km} km away
-                          </span>
-                          <span style={{ fontSize: "10px", color: "#94a3b8" }}>
-                            {new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a", marginBottom: "4px" }}>
-                          {n.title}
-                        </div>
-                        {n.message && (
-                          <p style={{ margin: 0, fontSize: "12px", color: "#475569", lineHeight: "1.4" }}>
-                            {n.message}
-                          </p>
-                        )}
-                      </div>
+                  {filteredDashboardReports.map((report) => {
+                    const issueId = report.issue_id || report.id;
+                    const userLat = currentUser?.latitude || 19.076;
+                    const userLng = currentUser?.longitude || 72.8777;
+                    const repLat = report.latitude || report.issue_lat;
+                    const repLng = report.longitude || report.issue_lng;
+                    const dist = report.distance_km !== undefined && report.distance_km !== null
+                      ? Number(report.distance_km)
+                      : getDistanceKm(userLat, userLng, repLat, repLng);
+                    const isRead = report.is_read !== undefined ? report.is_read : true;
+                    const trackingId = report.tracking_id || "CW-REPORT";
+                    const status = report.status || "Pending";
 
-                      {/* Part 2: Voting & Verification on Alert Card */}
+                    return (
                       <div
-                        style={{
-                          marginTop: "10px",
-                          paddingTop: "8px",
-                          borderTop: "1px solid #f1f5f9",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: "8px",
-                          flexWrap: "wrap",
+                        key={`${dashboardTab}-${report.id}`}
+                        onClick={() => {
+                          if (report.is_read === false) markNotificationRead(report.id);
+                          handleOpenGlobalIssue({
+                            id: issueId,
+                            tracking_id: trackingId,
+                            title: report.title,
+                            description: report.description || report.message,
+                            category: report.category,
+                            status: status,
+                            department: report.department,
+                            city: report.city,
+                            block: report.block,
+                            latitude: repLat,
+                            longitude: repLng,
+                            photo_url: report.photo_url,
+                            upvotes_count: report.upvotes_count,
+                            downvotes_count: report.downvotes_count,
+                            comments_count: report.comments_count,
+                            is_duplicate: report.is_duplicate,
+                            is_anonymous: report.is_anonymous,
+                            created_at: report.created_at,
+                          });
                         }}
+                        style={{
+                          background: isRead ? "#ffffff" : "#f0fdf4",
+                          border: isRead ? "1px solid #e2e8e5" : "1px solid #86efac",
+                          borderRadius: "10px",
+                          padding: "14px",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#082f26")}
+                        onMouseLeave={(e) => (e.currentTarget.style.borderColor = isRead ? "#e2e8e5" : "#86efac")}
                       >
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <button
-                            type="button"
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              if (!currentUser?.id || !n.issue_id) return;
-                              try {
-                                const res = await axios.post(`${API}/issues/${n.issue_id}/vote`, {
-                                  userId: currentUser.id,
-                                  voteType: "upvote",
-                                });
-                                setNotifications((prev) =>
-                                  prev.map((item) =>
-                                    item.issue_id === n.issue_id
-                                      ? {
-                                          ...item,
-                                          upvotes_count: res.data.upvotes_count,
-                                          downvotes_count: res.data.downvotes_count,
-                                          userVote: res.data.userVote,
-                                        }
-                                      : item
-                                  )
-                                );
-                              } catch (err) {
-                                console.error("Vote error:", err);
-                              }
-                            }}
-                            style={{
-                              background: n.userVote === "upvote" ? "#dcfce7" : "#ffffff",
-                              border: n.userVote === "upvote" ? "1px solid #16a34a" : "1px solid #cbd5e1",
-                              color: n.userVote === "upvote" ? "#15803d" : "#334155",
-                              borderRadius: "6px",
-                              padding: "4px 8px",
-                              fontSize: "11px",
-                              fontWeight: "700",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                            }}
-                            title="Verify Issue (Upvote)"
-                          >
-                            <span>👍</span> {n.upvotes_count || 0}
-                          </button>
+                        <div>
+                          {/* Top Row: Category, Distance, Status Badge */}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  fontWeight: "800",
+                                  textTransform: "uppercase",
+                                  padding: "2px 7px",
+                                  borderRadius: "4px",
+                                  background: "#ecfdf5",
+                                  color: "#065f46",
+                                }}
+                              >
+                                {report.category || "Civic"}
+                              </span>
+                              {dist !== null && (
+                                <span style={{ fontSize: "11px", fontWeight: "700", color: "#0b3d2e", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "1px 6px", borderRadius: "4px" }}>
+                                  📍 {dist} km
+                                </span>
+                              )}
+                            </div>
+                            <span className={`cw-badge ${String(status).toLowerCase().replace(/\s+/g, "-")}`} style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "8px" }}>
+                              {status}
+                            </span>
+                          </div>
 
-                          <button
-                            type="button"
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              if (!currentUser?.id || !n.issue_id) return;
-                              try {
-                                const res = await axios.post(`${API}/issues/${n.issue_id}/vote`, {
-                                  userId: currentUser.id,
-                                  voteType: "downvote",
-                                });
-                                setNotifications((prev) =>
-                                  prev.map((item) =>
-                                    item.issue_id === n.issue_id
-                                      ? {
-                                          ...item,
-                                          upvotes_count: res.data.upvotes_count,
-                                          downvotes_count: res.data.downvotes_count,
-                                          userVote: res.data.userVote,
-                                        }
-                                      : item
-                                  )
-                                );
-                              } catch (err) {
-                                console.error("Vote error:", err);
-                              }
-                            }}
-                            style={{
-                              background: n.userVote === "downvote" ? "#fee2e2" : "#ffffff",
-                              border: n.userVote === "downvote" ? "1px solid #dc2626" : "1px solid #cbd5e1",
-                              color: n.userVote === "downvote" ? "#b91c1c" : "#334155",
-                              borderRadius: "6px",
-                              padding: "4px 8px",
-                              fontSize: "11px",
-                              fontWeight: "700",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                            }}
-                            title="Flag as Duplicate or Fake (Downvote)"
-                          >
-                            <span>👎</span> {n.downvotes_count || 0}
-                          </button>
+                          {/* Title & Description */}
+                          <div style={{ fontSize: "14px", fontWeight: "700", color: "#0f172a", marginBottom: "4px", lineHeight: "1.3" }}>
+                            {report.title}
+                          </div>
+                          <p style={{ margin: "0 0 8px", fontSize: "12px", color: "#475569", lineHeight: "1.4", maxHeight: "40px", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {report.description || report.message || "No detailed description provided."}
+                          </p>
+
+                          {/* Location & Tracking ID */}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", color: "#64748b", marginBottom: "10px" }}>
+                            <span>{[report.block, report.city].filter(Boolean).join(", ") || "City Area"}</span>
+                            <span style={{ fontFamily: "monospace", fontWeight: "700", color: "#082f26" }}>
+                              {trackingId}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Bottom Card Actions: Voting & Comments */}
+                        <div
+                          style={{
+                            paddingTop: "8px",
+                            borderTop: "1px solid #f1f5f9",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "8px",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!currentUser?.id || !issueId) return;
+                                try {
+                                  const res = await axios.post(`${API}/issues/${issueId}/vote`, {
+                                    userId: currentUser.id,
+                                    voteType: "upvote",
+                                  });
+                                  const updateItem = (item) => {
+                                    const id = item.issue_id || item.id;
+                                    return id === issueId
+                                      ? { ...item, upvotes_count: res.data.upvotes_count, downvotes_count: res.data.downvotes_count, userVote: res.data.userVote }
+                                      : item;
+                                  };
+                                  setGlobalIssues((prev) => prev.map(updateItem));
+                                  setNotifications((prev) => prev.map(updateItem));
+                                } catch (err) {
+                                  console.error("Vote error:", err);
+                                }
+                              }}
+                              style={{
+                                background: report.userVote === "upvote" ? "#dcfce7" : "#ffffff",
+                                border: report.userVote === "upvote" ? "1px solid #16a34a" : "1px solid #cbd5e1",
+                                color: report.userVote === "upvote" ? "#15803d" : "#334155",
+                                borderRadius: "6px",
+                                padding: "4px 8px",
+                                fontSize: "11px",
+                                fontWeight: "700",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                              title="Verify Issue (Upvote)"
+                            >
+                              <span>👍</span> {report.upvotes_count || 0}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!currentUser?.id || !issueId) return;
+                                try {
+                                  const res = await axios.post(`${API}/issues/${issueId}/vote`, {
+                                    userId: currentUser.id,
+                                    voteType: "downvote",
+                                  });
+                                  const updateItem = (item) => {
+                                    const id = item.issue_id || item.id;
+                                    return id === issueId
+                                      ? { ...item, upvotes_count: res.data.upvotes_count, downvotes_count: res.data.downvotes_count, userVote: res.data.userVote }
+                                      : item;
+                                  };
+                                  setGlobalIssues((prev) => prev.map(updateItem));
+                                  setNotifications((prev) => prev.map(updateItem));
+                                } catch (err) {
+                                  console.error("Vote error:", err);
+                                }
+                              }}
+                              style={{
+                                background: report.userVote === "downvote" ? "#fee2e2" : "#ffffff",
+                                border: report.userVote === "downvote" ? "1px solid #dc2626" : "1px solid #cbd5e1",
+                                color: report.userVote === "downvote" ? "#b91c1c" : "#334155",
+                                borderRadius: "6px",
+                                padding: "4px 8px",
+                                fontSize: "11px",
+                                fontWeight: "700",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                              title="Flag Issue (Downvote)"
+                            >
+                              <span>👎</span> {report.downvotes_count || 0}
+                            </button>
+
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontSize: "11px",
+                                color: "#475569",
+                                padding: "4px 6px",
+                                borderRadius: "4px",
+                                background: "#f8fafc",
+                              }}
+                            >
+                              <span>💬</span> {report.comments_count || 0}
+                            </span>
+                          </div>
 
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedIssue({
-                                id: n.issue_id,
-                                tracking_id: n.tracking_id,
-                                title: n.title,
-                                description: n.message,
-                                category: n.category,
-                                status: n.status,
-                                upvotes_count: n.upvotes_count,
-                                downvotes_count: n.downvotes_count,
-                                is_duplicate: n.is_duplicate,
-                                comments_count: n.comments_count,
+                              if (report.is_read === false) markNotificationRead(report.id);
+                              handleOpenGlobalIssue({
+                                id: issueId,
+                                tracking_id: trackingId,
+                                title: report.title,
+                                description: report.description || report.message,
+                                category: report.category,
+                                status: status,
+                                department: report.department,
+                                city: report.city,
+                                block: report.block,
+                                latitude: repLat,
+                                longitude: repLng,
+                                photo_url: report.photo_url,
+                                upvotes_count: report.upvotes_count,
+                                downvotes_count: report.downvotes_count,
+                                comments_count: report.comments_count,
+                                is_duplicate: report.is_duplicate,
+                                is_anonymous: report.is_anonymous,
+                                created_at: report.created_at,
                               });
                             }}
                             style={{
-                              background: "#f1f5f9",
-                              border: "1px solid #cbd5e1",
-                              color: "#334155",
-                              borderRadius: "6px",
-                              padding: "4px 8px",
+                              background: "#082f26",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "5px",
+                              padding: "5px 10px",
                               fontSize: "11px",
                               fontWeight: "700",
                               cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
                             }}
-                            title="Open Citizen Discussion"
                           >
-                            <span>💬</span> {n.comments_count || 0}
+                            View Report →
                           </button>
-
-                          {n.is_duplicate && (
-                            <span style={{ fontSize: "10px", fontWeight: "800", color: "#854d0e", background: "#fef9c3", border: "1px solid #fef08a", padding: "2px 6px", borderRadius: "4px" }}>
-                              ⚠️ Duplicate
-                            </span>
-                          )}
                         </div>
-
-                        <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>
-                          {n.tracking_id || "CW-ALERT"}
-                        </span>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            {/* Recent Reports Table & Info Cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "20px" }}>
-              {/* Left Column: Recent Submissions */}
-              <div className="cw-card" style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "18px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: "15px", color: "#0f172a" }}>Recent Complaints</h3>
-                    <span style={{ fontSize: "12px", color: "#64748b" }}>Your latest reported issues</span>
-                  </div>
-                  <button
-                    onClick={() => switchTab("My Reports")}
-                    style={{ background: "transparent", border: "none", color: "#0b3d2e", fontWeight: "700", cursor: "pointer", fontSize: "12px" }}
-                  >
-                    View All ({issues.length}) →
-                  </button>
+            {/* Civic Advisory & Information Cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "20px", marginTop: "16px" }}>
+              {/* Municipal Advisory Card */}
+              <div style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "18px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "18px" }}>📢</span>
+                  <h3 style={{ margin: 0, fontSize: "14px", color: "#0b3d2e" }}>Civic Notice Board</h3>
                 </div>
-
-                {issues.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "40px 10px", color: "#64748b" }}>
-                    <p style={{ margin: 0 }}>You haven't reported any civic problems yet.</p>
-                    <button
-                      onClick={() => switchTab("Report a Problem")}
-                      style={{ marginTop: "12px", padding: "8px 16px", background: "#0b3d2e", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}
-                    >
-                      Report your first issue
-                    </button>
+                <div style={{ fontSize: "12px", color: "#475569", lineHeight: "1.5" }}>
+                  <div style={{ padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
+                    <b>Drainage De-silting Drive:</b> Special desilting teams active in Powai & S-Ward.
                   </div>
-                ) : (
-                  <div className="cw-table-wrapper" style={{ overflowX: "auto" }}>
-                    <table className="cw-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-                      <thead>
-                        <tr style={{ background: "#f8fafc", textAlign: "left", borderBottom: "1px solid #e2e8e5" }}>
-                          <th style={{ padding: "10px" }}>Tracking ID</th>
-                          <th style={{ padding: "10px" }}>Title</th>
-                          <th style={{ padding: "10px" }}>Category</th>
-                          <th style={{ padding: "10px" }}>Date</th>
-                          <th style={{ padding: "10px" }}>Status</th>
-                          <th style={{ padding: "10px" }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {issues.slice(0, 5).map((item) => (
-                          <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                            <td style={{ padding: "10px", fontFamily: "monospace", fontWeight: "700", color: "#0b3d2e" }}>
-                              {item.tracking_id}
-                            </td>
-                            <td style={{ padding: "10px", fontWeight: "600", color: "#0f172a", maxWidth: "200px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              {item.title}
-                            </td>
-                            <td style={{ padding: "10px", color: "#475569" }}>{item.category}</td>
-                            <td style={{ padding: "10px", color: "#64748b" }}>{formatDate(item.created_at)}</td>
-                            <td style={{ padding: "10px" }}>
-                              <span className={`cw-badge ${String(item.status || "pending").toLowerCase().replace(/\s+/g, "-")}`}>
-                                {item.status}
-                              </span>
-                            </td>
-                            <td style={{ padding: "10px" }}>
-                              <button
-                                onClick={() => setSelectedIssue(item)}
-                                style={{ padding: "4px 8px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: "600" }}
-                              >
-                                View
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div style={{ padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
+                    <b>Street Light LED Upgrade:</b> Report dim/flickering poles to Street Lighting Dept.
                   </div>
-                )}
+                  <div style={{ padding: "8px 0" }}>
+                    <b>Emergency Helpline:</b> BMC Disaster Management Room is 24x7 active at <b>1916</b>.
+                  </div>
+                </div>
               </div>
 
-              {/* Right Column: Civic Advisory & Category distribution */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                {/* Municipal Advisory Card */}
-                <div style={{ background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", padding: "18px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                    <span style={{ fontSize: "18px" }}>📢</span>
-                    <h3 style={{ margin: 0, fontSize: "14px", color: "#0b3d2e" }}>Civic Notice Board</h3>
-                  </div>
-                  <div style={{ fontSize: "12px", color: "#475569", lineHeight: "1.5" }}>
-                    <div style={{ padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
-                      <b>Drainage De-silting Drive:</b> Special desilting teams active in Powai & S-Ward.
-                    </div>
-                    <div style={{ padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
-                      <b>Street Light LED Upgrade:</b> Report dim/flickering poles to Street Lighting Dept.
-                    </div>
-                    <div style={{ padding: "8px 0" }}>
-                      <b>Emergency Helpline:</b> BMC Disaster Management Room is 24x7 active at <b>1916</b>.
-                    </div>
-                  </div>
+              {/* Identity Protection Status Card */}
+              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "18px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "18px" }}>🛡️</span>
+                  <strong style={{ color: "#065f46", fontSize: "13px" }}>Identity Guard Active</strong>
                 </div>
-
-                {/* Identity Protection Status Card */}
-                <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "16px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "18px" }}>🛡️</span>
-                    <strong style={{ color: "#065f46", fontSize: "13px" }}>Identity Guard Active</strong>
-                  </div>
-                  <p style={{ margin: 0, fontSize: "12px", color: "#166534", lineHeight: "1.4" }}>
-                    When anonymous reporting is toggled ON, your identity is cryptographically isolated from public maps and municipal officer consoles.
-                  </p>
-                </div>
+                <p style={{ margin: 0, fontSize: "12px", color: "#166534", lineHeight: "1.4" }}>
+                  When anonymous reporting is toggled ON, your identity is cryptographically isolated from public maps and municipal officer consoles.
+                </p>
               </div>
             </div>
           </div>

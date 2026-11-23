@@ -509,7 +509,41 @@ function App() {
     const hash = window.location.hash.replace(/^#/, "");
     const [pagePart] = hash.split("?");
     const valid = ["home", "report", "map", "track", "login", "signup", "user-dashboard", "admin"];
-    return valid.includes(pagePart) ? pagePart : "home";
+
+    // 1. If explicit valid hash page (not home)
+    if (valid.includes(pagePart) && pagePart !== "home") {
+      return pagePart;
+    }
+
+    // 2. Check saved user session
+    let savedUser = null;
+    try {
+      savedUser = JSON.parse(localStorage.getItem(SESSION_KEY));
+    } catch {}
+
+    const lastPage = localStorage.getItem("cw_last_page");
+
+    // If logged in citizen with valid session
+    if (savedUser?.id && savedUser?.name) {
+      if (
+        pagePart === "user-dashboard" ||
+        lastPage === "user-dashboard" ||
+        !pagePart ||
+        pagePart === "home" ||
+        pagePart === "login" ||
+        pagePart === "signup"
+      ) {
+        return "user-dashboard";
+      }
+      if (lastPage && valid.includes(lastPage)) {
+        return lastPage;
+      }
+      return "user-dashboard";
+    }
+
+    if (valid.includes(pagePart)) return pagePart;
+    if (lastPage && valid.includes(lastPage) && lastPage !== "user-dashboard") return lastPage;
+    return "home";
   };
 
   const [page, setPage] = useState(getInitialPage);
@@ -519,13 +553,24 @@ function App() {
     localStorage.setItem("cw_language", language);
   }, [language]);
 
+  useEffect(() => {
+    if (page) {
+      localStorage.setItem("cw_last_page", page);
+    }
+  }, [page]);
+
   // Set up browser history stack & back navigation support
   useEffect(() => {
     const initialPage = getInitialPage();
     // Safety check: ensure history has a root anchor so back from home doesn't close website
     if (!window.history.state) {
-      window.history.replaceState({ page: "root-anchor" }, "", window.location.hash || "#home");
-      window.history.pushState({ page: initialPage }, "", window.location.hash || `#${initialPage}`);
+      window.history.replaceState({ page: "root-anchor" }, "", "#home");
+      const currentHash = window.location.hash || `#${initialPage}`;
+      window.history.pushState(
+        { page: initialPage },
+        "",
+        currentHash.startsWith(`#${initialPage}`) ? currentHash : `#${initialPage}`
+      );
     }
   }, []);
 
@@ -849,6 +894,7 @@ function App() {
   function go(nextPage, pushHistory = true) {
     setAuthMsg({ type: "", text: "" });
     setPage(nextPage);
+    localStorage.setItem("cw_last_page", nextPage);
     window.scrollTo(0, 0);
     if (pushHistory) {
       if (!window.history.state || window.history.state.page !== nextPage) {
@@ -957,6 +1003,7 @@ function App() {
   }
   function logout() {
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem("cw_last_page");
     setUser(null);
     go("home");
   }
