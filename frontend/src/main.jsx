@@ -15,6 +15,7 @@ import "./styles.css";
 
 import AdminDashboard from "./AdminDashboard";
 import UserDashboard from "./UserDashboard";
+import { translations, translateStatus, translateCategory, translateAuthority, translatePrivacy, translateGender } from "./translations";
 
 const API = "http://localhost:5001/api";
 
@@ -99,170 +100,7 @@ function MapViewport({ points }) {
   return null;
 }
 
-const translations = {
-  en: {
-    home: "Home", map: "Map", dashboard: "Dashboard", track: "Track",
-    login: "Login", signup: "Sign up", logout: "Logout", hello: "Hi,",
-    language: "Language",
-    heroTitle: "See a civic problem? Make it visible.",
-    heroDescription: "Report public issues anonymously, help communities identify problems, and track their resolution.",
-    createAccount: "Create free account", publicMap: "View Public Map",
-    totalReports: "Total reports", pending: "Pending", resolved: "Resolved",
-    publicIssueMap: "Public Issue Map",
-    exploreMap: "Explore civic issues reported across India. Select a marker to view the report details.",
-    status: "Status", trackingId: "Tracking ID", civicIssue: "Civic issue",
-    noDescription: "No description provided.", indiaIssueMap: "India Issue Map",
-    noMappedReports: "No mapped reports yet. India is shown as the default view. Reports with valid latitude and longitude will appear here.",
-    mappedReports: "Mapped reports", invalidCoordinates: "Reports without valid coordinates",
-    refreshMap: "Refresh map view", governmentDashboard: "Government Dashboard",
-    total: "Total", inProgress: "In Progress", mostReported: "Most Reported Problems",
-    noData: "No data yet.", recentReports: "Recent Reports", noRecentReports: "No recent reports.",
-    trackYourReport: "Track Your Report", trackingPlaceholder: "Enter tracking ID e.g. CW-XXXX",
-    trackButton: "Track", department: "Department", welcomeBack: "Welcome back",
-    loginDescription: "Log in to your CivicWatch account.", email: "Email", password: "Password",
-    loggingIn: "Logging in...", logIn: "Log in", newToCivicWatch: "New to CivicWatch?",
-    createAccountLink: "Create an account", createYourAccount: "Create your account",
-    signupDescription: "It takes less than a minute.", fullName: "Full name",
-    yourName: "Your name", mobileNumber: "Mobile number", mobilePlaceholder: "10-digit mobile number",
-    gender: "Gender", selectGender: "Select gender", male: "Male", female: "Female",
-    other: "Other", preferNotToSay: "Prefer not to say", confirmPassword: "Confirm password",
-    passwordPlaceholder: "At least 8 characters", creatingAccount: "Creating account...",
-    alreadyHaveAccount: "Already have an account?", footer: "CivicWatch • Community-powered civic issue visibility",
-    fullNameError: "Please enter your full name.", genderError: "Please select your gender.",
-    mobileError: "Enter a valid 10-digit Indian mobile number.", passwordError: "Password must be at least 8 characters.",
-    passwordMismatch: "Passwords do not match.", backendError: "Cannot connect to the backend. Check that it is running on port 5001.",
-    signupError: "Signup failed. Please try again.", loginError: "Login failed. Please try again.",
-    report: "Report", reportProblem: "Report a Problem", submitComplaint: "Submit a Complaint",
-    reportDescription: "Describe the civic issue, select the responsible authority, and pin its exact location on the map.",
-    signedInAs: "Signed in as", anonymousSubmit: "You can submit anonymously.", complaintTitle: "Complaint title",
-    complaintTitlePlaceholder: "e.g. Large pothole on Main Road", description: "Description",
-    descriptionPlaceholder: "Explain the issue and any useful details...", forwardAuthority: "Forward complaint to authority",
-    selectAuthority: "-- Select Authority --", uploadPhoto: "Upload a photo (optional, max 5 MB)",
-    chooseLocation: "Choose Complaint Location", locationInstructions: "Click the map to place a pin, or drag the pin to adjust it.",
-    currentLocation: "Use My Current Location", selectedLocation: "Selected complaint location", latitude: "Latitude", longitude: "Longitude",
-    noLocation: "No location selected yet. Select a point on the map.", submitting: "Submitting...", submit: "Submit Complaint",
-    locationUnsupported: "Geolocation is not supported by this browser.", locationDenied: "Location permission was denied. You can select the location manually on the map.",
-    locationFailed: "Could not get your current location. Please select it on the map.", selectLocationError: "Please select the complaint location on the map.",
-    submitSuccess: "Complaint submitted successfully. Tracking ID:", submitError: "Could not submit complaint. Check that the backend is running.",
-    authority0: "Municipal Corporation", authority1: "Public Works Department (PWD)", authority2: "Traffic Police Department",
-    authority3: "Water Supply Department", authority4: "Electricity Department", authority5: "Sanitation and Waste Management",
-    authority6: "Drainage and Sewerage Department", authority7: "Street Lighting Department", authority8: "Parks and Garden Department",
-    authority9: "Pollution Control Board", authority10: "Urban Development Authority", authority11: "Fire and Emergency Services",
-    heroEyebrow: "TOGETHER FOR BETTER NEIGHBORHOODS", heroTitle: "Better streets start with your voice.",
-    heroDescription: "Spotted a pothole, overflowing garbage, or a broken streetlight? Make the problem visible, discover local reports, and follow its progress.",
-    reportIssue: "Report an issue", exploreMap: "Explore public map", freeToUse: "Free to use", anonymous: "Anonymous issue reporting", trackById: "Track by ID",
-    communitySnapshot: "COMMUNITY SNAPSHOT", inProgress: "In progress", simpleDesign: "SIMPLE BY DESIGN", stepsTitle: "Make change in three simple steps",
-    stepsSubtitle: "From spotting a problem to following its status, civic participation should be easy.", stepReport: "Report an issue", stepReportText: "Choose a category, describe the problem, and optionally pinpoint its location on the map.",
-    stepMap: "See it on the map", stepMapText: "Browse publicly reported problems near a place and understand what is affecting the community.",
-    stepTrack: "Track its progress", stepTrackText: "Keep your tracking ID to check whether the issue is pending, in progress, or resolved.",
-    commonIssues: "COMMON CIVIC ISSUES", chooseIssue: "What would you like to report?", chooseIssueSub: "Choose the type of problem you noticed.",
-    road: "Road", roadText: "Potholes & damaged streets", garbage: "Garbage", garbageText: "Waste collection & litter", water: "Water", waterText: "Leaks & water supply",
-    streetlight: "Streetlight", streetlightText: "Broken public lighting", drainage: "Drainage", drainageText: "Blocked drains & flooding", otherIssue: "Other", otherText: "Other public issues",
-    latestReports: "Latest community reports", publicTransparency: "PUBLIC TRANSPARENCY", reportsIntro: "Real issue data, updated from your CivicWatch database.", viewDashboard: "View dashboard", trackReport: "Track report",
-    pendingLabel: "Pending", inProgressLabel: "In Progress", resolvedLabel: "Resolved", voiceDifference: "YOUR VOICE MAKES A DIFFERENCE", ctaTitle: "See something that needs attention?", ctaText: "Help make your neighborhood better, one report at a time.",
-    footerAbout: "Community-powered visibility for public issues. A project prototype, not an official government portal.", submitLink: "Submit a report", reportRoadTitle: "Pothole reported near the main road", reportGarbageTitle: "Garbage collection is delayed", everyReport: "Every report matters", reportTrackImprove: "Report · Track · Improve",
-    category: "Category", selectCategory: "-- Select Category --",
-    cat_Road: "Road", cat_Garbage: "Garbage", cat_WaterSupply: "Water Supply", cat_StreetLight: "Street Light",
-    cat_Drainage: "Drainage", cat_Electricity: "Electricity", cat_Traffic: "Traffic", cat_Parks: "Parks & Gardens",
-    cat_Pollution: "Pollution", cat_Other: "Other",
-    state: "State", city: "City", block: "Area / Ward / Block", pincode: "Pincode",
-    pincodePlaceholder: "e.g. 400076", blockPlaceholder: "e.g. Powai / Ward 5", cityPlaceholder: "e.g. Mumbai", statePlaceholder: "e.g. Maharashtra",
-    anonymousReportTitle: "Report Anonymously (Identity Protected)",
-    anonymousHelpLogged: "Your name and contact details will NOT be shown to admins, government officers, or on public maps. It will only be visible in your private citizen dashboard.",
-    anonymousHelpGuest: "You are not signed in. This complaint will be submitted completely anonymously without any personal details.",
-    anonymousBadge: "Anonymous (Identity Protected)", registeredBadge: "Registered Citizen",
-    myReports: "My Reports", citizenDashboard: "Citizen Dashboard",
-    citizenDashboardSubtitle: "View and track all complaints you have submitted, including anonymous ones.",
-    noMyReports: "You have not submitted any complaints yet.", reportNewComplaint: "Report a New Problem",
-    dateSubmitted: "Submitted on", locationLabel: "Location"
-  },
-  hi: {
-    home: "होम", map: "नक्शा", dashboard: "डैशबोर्ड", track: "ट्रैक करें",
-    login: "लॉग इन", signup: "साइन अप", logout: "लॉग आउट", hello: "नमस्ते,",
-    language: "भाषा",
-    heroTitle: "कोई नागरिक समस्या दिखे? उसे सामने लाएँ।",
-    heroDescription: "सार्वजनिक समस्याओं की गुमनाम रिपोर्ट करें, समुदायों को समस्याएँ पहचानने में मदद करें और उनके समाधान को ट्रैक करें।",
-    createAccount: "मुफ़्त खाता बनाएँ", publicMap: "सार्वजनिक नक्शा देखें",
-    totalReports: "कुल रिपोर्ट", pending: "लंबित", resolved: "हल की गई",
-    publicIssueMap: "सार्वजनिक समस्या नक्शा",
-    exploreMap: "भारत में दर्ज नागरिक समस्याएँ देखें। रिपोर्ट का विवरण देखने के लिए किसी मार्कर को चुनें।",
-    status: "स्थिति", trackingId: "ट्रैकिंग आईडी", civicIssue: "नागरिक समस्या",
-    noDescription: "कोई विवरण उपलब्ध नहीं है।", indiaIssueMap: "भारत समस्या नक्शा",
-    noMappedReports: "अभी तक नक्शे पर कोई रिपोर्ट नहीं है। डिफ़ॉल्ट रूप से भारत दिखाया गया है। सही अक्षांश और देशांतर वाली रिपोर्ट यहाँ दिखाई देंगी।",
-    mappedReports: "नक्शे पर रिपोर्ट", invalidCoordinates: "बिना मान्य निर्देशांक वाली रिपोर्ट",
-    refreshMap: "नक्शा रीफ़्रेश करें", governmentDashboard: "सरकारी डैशबोर्ड",
-    total: "कुल", inProgress: "प्रगति पर", mostReported: "सबसे ज़्यादा रिपोर्ट की गई समस्याएँ",
-    noData: "अभी कोई डेटा नहीं है।", recentReports: "हाल की रिपोर्ट", noRecentReports: "कोई हाल की रिपोर्ट नहीं है।",
-    trackYourReport: "अपनी रिपोर्ट ट्रैक करें", trackingPlaceholder: "ट्रैकिंग आईडी दर्ज करें, जैसे CW-XXXX",
-    trackButton: "ट्रैक करें", department: "विभाग", welcomeBack: "वापसी पर स्वागत है",
-    loginDescription: "अपने CivicWatch खाते में लॉग इन करें।", email: "ईमेल", password: "पासवर्ड",
-    loggingIn: "लॉग इन हो रहा है...", logIn: "लॉग इन", newToCivicWatch: "CivicWatch पर नए हैं?",
-    createAccountLink: "खाता बनाएँ", createYourAccount: "अपना खाता बनाएँ",
-    signupDescription: "इसमें एक मिनट से भी कम समय लगेगा।", fullName: "पूरा नाम",
-    yourName: "अपना नाम लिखें", mobileNumber: "मोबाइल नंबर", mobilePlaceholder: "10 अंकों का मोबाइल नंबर",
-    gender: "लिंग", selectGender: "लिंग चुनें", male: "पुरुष", female: "महिला",
-    other: "अन्य", preferNotToSay: "बताना नहीं चाहते", confirmPassword: "पासवर्ड की पुष्टि करें",
-    passwordPlaceholder: "कम से कम 8 अक्षर", creatingAccount: "खाता बनाया जा रहा है...",
-    alreadyHaveAccount: "पहले से खाता है?", footer: "CivicWatch • समुदाय की भागीदारी से नागरिक समस्याओं को सामने लाना",
-    fullNameError: "कृपया अपना पूरा नाम दर्ज करें।", genderError: "कृपया अपना लिंग चुनें।",
-    mobileError: "मान्य 10 अंकों का भारतीय मोबाइल नंबर दर्ज करें।", passwordError: "पासवर्ड कम से कम 8 अक्षरों का होना चाहिए।",
-    passwordMismatch: "दोनों पासवर्ड मेल नहीं खाते।", backendError: "बैकएंड से कनेक्ट नहीं हो पा रहा है। जाँचें कि वह पोर्ट 5001 पर चल रहा है।",
-    signupError: "साइन अप नहीं हो पाया। कृपया फिर से प्रयास करें।", loginError: "लॉग इन नहीं हो पाया। कृपया फिर से प्रयास करें।",
-    report: "रिपोर्ट", reportProblem: "समस्या की रिपोर्ट करें", submitComplaint: "शिकायत दर्ज करें",
-    reportDescription: "नागरिक समस्या का विवरण दें, जिम्मेदार विभाग चुनें और नक्शे पर उसका सही स्थान चुनें।",
-    signedInAs: "लॉग इन हैं:", anonymousSubmit: "आप गुमनाम रूप से शिकायत दर्ज कर सकते हैं।", complaintTitle: "शिकायत का शीर्षक",
-    complaintTitlePlaceholder: "जैसे: मुख्य सड़क पर बड़ा गड्ढा", description: "विवरण",
-    descriptionPlaceholder: "समस्या और उससे जुड़ी उपयोगी जानकारी बताएँ...", forwardAuthority: "शिकायत संबंधित विभाग को भेजें",
-    selectAuthority: "-- विभाग चुनें --", uploadPhoto: "फोटो अपलोड करें (वैकल्पिक, अधिकतम 5 MB)",
-    chooseLocation: "शिकायत का स्थान चुनें", locationInstructions: "नक्शे पर पिन लगाने के लिए क्लिक करें या पिन को खींचकर सही स्थान पर रखें।",
-    currentLocation: "मेरी वर्तमान लोकेशन का उपयोग करें", selectedLocation: "चुना गया शिकायत स्थान", latitude: "अक्षांश", longitude: "देशांतर",
-    noLocation: "अभी तक कोई स्थान नहीं चुना गया है। नक्शे पर एक स्थान चुनें।", submitting: "शिकायत भेजी जा रही है...", submit: "शिकायत दर्ज करें",
-    locationUnsupported: "इस ब्राउज़र में लोकेशन सुविधा उपलब्ध नहीं है।", locationDenied: "लोकेशन की अनुमति नहीं मिली। आप नक्शे पर स्वयं स्थान चुन सकते हैं।",
-    locationFailed: "वर्तमान लोकेशन नहीं मिल सकी। कृपया नक्शे पर स्थान चुनें।", selectLocationError: "कृपया नक्शे पर शिकायत का स्थान चुनें।",
-    submitSuccess: "शिकायत सफलतापूर्वक दर्ज हुई। ट्रैकिंग आईडी:", submitError: "शिकायत दर्ज नहीं हो सकी। कृपया बैकएंड जाँचें।",
-    authority0: "नगर निगम", authority1: "लोक निर्माण विभाग (PWD)", authority2: "यातायात पुलिस विभाग",
-    authority3: "जल आपूर्ति विभाग", authority4: "बिजली विभाग", authority5: "स्वच्छता एवं अपशिष्ट प्रबंधन विभाग",
-    authority6: "जल निकासी एवं सीवरेज विभाग", authority7: "स्ट्रीट लाइट विभाग", authority8: "उद्यान एवं पार्क विभाग",
-    authority9: "प्रदूषण नियंत्रण बोर्ड", authority10: "शहरी विकास प्राधिकरण", authority11: "अग्निशमन एवं आपातकालीन सेवाएँ",
-    heroEyebrow: "बेहतर मोहल्लों के लिए साथ मिलकर", heroTitle: "बेहतर सड़कें आपकी आवाज़ से शुरू होती हैं।",
-    heroDescription: "क्या आपको सड़क पर गड्ढा, कूड़े का ढेर या खराब स्ट्रीट लाइट दिखी? समस्या की रिपोर्ट करें, आसपास की शिकायतें देखें और समाधान की स्थिति जानें।",
-    reportIssue: "समस्या की रिपोर्ट करें", exploreMap: "सार्वजनिक नक्शा देखें", freeToUse: "निःशुल्क सेवा", anonymous: "गुमनाम रिपोर्टिंग", trackById: "आईडी से ट्रैक करें",
-    communitySnapshot: "समुदाय की स्थिति", inProgress: "प्रगति पर", simpleDesign: "आसान प्रक्रिया", stepsTitle: "तीन आसान चरणों में बदलाव लाएँ",
-    stepsSubtitle: "समस्या देखने से लेकर उसकी स्थिति जानने तक, नागरिक भागीदारी आसान होनी चाहिए।", stepReport: "समस्या की रिपोर्ट करें", stepReportText: "श्रेणी चुनें, समस्या बताएँ और चाहें तो नक्शे पर उसका स्थान चुनें।",
-    stepMap: "नक्शे पर देखें", stepMapText: "सार्वजनिक रूप से दर्ज समस्याएँ देखें और जानें कि आपके समुदाय में क्या हो रहा है।",
-    stepTrack: "स्थिति ट्रैक करें", stepTrackText: "अपनी ट्रैकिंग आईडी से जानें कि समस्या लंबित है, प्रगति पर है या हल हो गई है।",
-    commonIssues: "आम नागरिक समस्याएँ", chooseIssue: "आप किस समस्या की रिपोर्ट करना चाहते हैं?", chooseIssueSub: "आपने जिस प्रकार की समस्या देखी है, उसे चुनें।",
-    road: "सड़क", roadText: "गड्ढे और खराब सड़कें", garbage: "कचरा", garbageText: "कचरा संग्रह और गंदगी", water: "पानी", waterText: "पानी का रिसाव और आपूर्ति",
-    streetlight: "स्ट्रीट लाइट", streetlightText: "खराब सार्वजनिक रोशनी", drainage: "जल निकासी", drainageText: "जाम नालियाँ और जलभराव", otherIssue: "अन्य", otherText: "अन्य सार्वजनिक समस्याएँ",
-    latestReports: "समुदाय की हाल की रिपोर्ट", publicTransparency: "सार्वजनिक पारदर्शिता", reportsIntro: "आपके CivicWatch डेटाबेस से अपडेट किया गया वास्तविक समस्या डेटा।", viewDashboard: "डैशबोर्ड देखें", trackReport: "रिपोर्ट ट्रैक करें",
-    pendingLabel: "लंबित", inProgressLabel: "प्रगति पर", resolvedLabel: "हल हो गया", voiceDifference: "आपकी आवाज़ बदलाव ला सकती है", ctaTitle: "क्या आपने कोई ऐसी समस्या देखी है जिस पर ध्यान देना चाहिए?", ctaText: "एक-एक रिपोर्ट के ज़रिए अपने मोहल्ले को बेहतर बनाएँ।",
-    footerAbout: "समुदाय की भागीदारी से सार्वजनिक समस्याओं को सामने लाने का मंच। यह एक प्रोजेक्ट प्रोटोटाइप है, आधिकारिक सरकारी पोर्टल नहीं।", submitLink: "रिपोर्ट दर्ज करें", reportRoadTitle: "मुख्य सड़क के पास गड्ढे की रिपोर्ट", reportGarbageTitle: "कचरा संग्रह में देरी", everyReport: "हर रिपोर्ट महत्वपूर्ण है", reportTrackImprove: "रिपोर्ट करें · ट्रैक करें · सुधारें",
-    category: "श्रेणी", selectCategory: "-- श्रेणी चुनें --",
-    cat_Road: "सड़क", cat_Garbage: "कचरा", cat_WaterSupply: "जल आपूर्ति", cat_StreetLight: "स्ट्रीट लाइट",
-    cat_Drainage: "जल निकासी", cat_Electricity: "बिजली", cat_Traffic: "यातायात", cat_Parks: "पार्क और उद्यान",
-    cat_Pollution: "प्रदूषण", cat_Other: "अन्य",
-    state: "राज्य", city: "शहर", block: "क्षेत्र / वार्ड / ब्लॉक", pincode: "पिनकोड",
-    pincodePlaceholder: "उदा. 400076", blockPlaceholder: "उदा. पवई / वार्ड 5", cityPlaceholder: "उदा. मुंबई", statePlaceholder: "उदा. महाराष्ट्र",
-    anonymousReportTitle: "गुमनाम रूप से शिकायत दर्ज करें (पहचान सुरक्षित)",
-    anonymousHelpLogged: "आपका नाम या संपर्क विवरण किसी भी एडमिन, सरकारी अधिकारी या नक्शे पर नहीं दिखेगा। यह सिर्फ आपके व्यक्तिगत डैशबोर्ड पर दिखाई देगा।",
-    anonymousHelpGuest: "आप लॉग इन नहीं हैं। यह शिकायत पूरी तरह गुमनाम रूप से दर्ज की जाएगी।",
-    anonymousBadge: "गुमनाम (पहचान सुरक्षित)", registeredBadge: "पंजीकृत नागरिक",
-    myReports: "मेरी रिपोर्ट", citizenDashboard: "नागरिक डैशबोर्ड",
-    citizenDashboardSubtitle: "आपके द्वारा दर्ज की गई सभी शिकायतें यहाँ देखें, जिसमें गुमनाम रिपोर्ट भी शामिल हैं।",
-    noMyReports: "आपने अभी तक कोई शिकायत दर्ज नहीं की है।", reportNewComplaint: "नई शिकायत दर्ज करें",
-    dateSubmitted: "दर्ज करने की तारीख", locationLabel: "स्थान"
-  },
-};
-
-function translateStatus(status, language) {
-  if (language !== "hi") return status;
-  const labels = {
-    pending: "लंबित",
-    "in progress": "प्रगति पर",
-    resolved: "हल हो गया",
-  };
-  return labels[String(status || "").toLowerCase()] || status;
-}
+// Translations imported from ./translations.js
 
 function statusClass(status) {
   return String(status || "pending").toLowerCase().replace(/\s+/g, "-");
@@ -1133,7 +971,7 @@ function App() {
                 style={{ cursor: "pointer" }}
                 title="View Citizen Dashboard"
               >
-                {t("hello")} {user.name.split(" ")[0]}
+                {t("hello")} {user?.name ? user.name.split(" ")[0] : "Citizen"}
               </span>
               <button onClick={logout}>{t("logout")}</button>
             </>
@@ -1168,7 +1006,13 @@ function App() {
   }
 
   if (page === "admin") {
-    return <AdminDashboard onLogout={() => go("home")} />;
+    return (
+      <AdminDashboard
+        onLogout={() => go("home")}
+        language={language}
+        setLanguage={setLanguage}
+      />
+    );
   }
 
   if (page === "user-dashboard") {
@@ -1193,6 +1037,8 @@ function App() {
         onLogout={logout}
         onNavigate={(target) => go(target)}
         onUserUpdate={(updatedUser) => setUser(updatedUser)}
+        language={language}
+        setLanguage={setLanguage}
       />
     );
   }
@@ -1264,7 +1110,7 @@ function App() {
             <h2>{t("submitComplaint")}</h2>
             <p className="map-description">
               {t("reportDescription")}
-              {user ? ` ${t("signedInAs")} ${user.name}.` : ` ${t("anonymousSubmit")}`}
+              {user ? ` ${t("signedInAs")} ${user.name || "Citizen"}.` : ` ${t("anonymousSubmit")}`}
             </p>
             <form className="form complaint-form" onSubmit={submitComplaint}>
               <div className="grid2">
@@ -1579,12 +1425,12 @@ function App() {
                         </span>
                         {selectedMapIssue.is_duplicate && (
                           <span style={{ fontSize: "11px", fontWeight: "800", color: "#854d0e", background: "#fef9c3", border: "1px solid #fef08a", padding: "2px 8px", borderRadius: "4px" }}>
-                            ⚠️ Merged Duplicate Issue
+                            ⚠️ {t("mergedDuplicateIssue")}
                           </span>
                         )}
                       </div>
                       <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "800", color: "#0f172a" }}>
-                        {selectedMapIssue.title || selectedMapIssue.category || "Reported Civic Issue"}
+                        {selectedMapIssue.title || translateCategory(selectedMapIssue.category, language) || t("reportedCivicIssue")}
                       </h3>
                     </div>
                     <button
@@ -1612,7 +1458,7 @@ function App() {
                   {selectedMapIssue.photo_url && (
                     <div style={{ marginBottom: "16px" }}>
                       <div style={{ fontSize: "12px", fontWeight: "700", color: "#475569", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span>📸</span> Citizen Photo Evidence
+                        <span>📸</span> {language === "hi" ? "नागरिक फोटो साक्ष्य" : "Citizen Photo Evidence"}
                       </div>
                       <img
                         src={selectedMapIssue.photo_url.startsWith("http") || selectedMapIssue.photo_url.startsWith("data:") ? selectedMapIssue.photo_url : `http://localhost:5001${selectedMapIssue.photo_url}`}
@@ -1626,30 +1472,30 @@ function App() {
                   <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "14px", border: "1px solid #e2e8f0", marginBottom: "16px" }}>
                     <div style={{ marginBottom: "12px" }}>
                       <div style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", marginBottom: "4px" }}>
-                        Issue Description
+                        {language === "hi" ? "समस्या का विवरण" : "Issue Description"}
                       </div>
                       <p style={{ margin: 0, fontSize: "13px", color: "#1e293b", lineHeight: "1.5" }}>
-                        {selectedMapIssue.description || "No description provided."}
+                        {selectedMapIssue.description || t("noDescription")}
                       </p>
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px", paddingTop: "10px", borderTop: "1px solid #f1f5f9", fontSize: "12px" }}>
                       <div>
-                        <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>Department</span>
-                        <b style={{ color: "#0f172a" }}>{selectedMapIssue.department || "Municipal Corporation"}</b>
+                        <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>{t("department")}</span>
+                        <b style={{ color: "#0f172a" }}>{translateAuthority(selectedMapIssue.department, language)}</b>
                       </div>
                       <div>
-                        <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>Location</span>
+                        <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>{t("locationLabel")}</span>
                         <b style={{ color: "#0f172a" }}>{[selectedMapIssue.block, selectedMapIssue.city, selectedMapIssue.state].filter(Boolean).join(", ") || "Mumbai, Maharashtra"}</b>
                       </div>
                       <div>
-                        <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>Coordinates</span>
+                        <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>{t("coordinates")}</span>
                         <b style={{ color: "#0f172a", fontFamily: "monospace", fontSize: "11px" }}>
                           {Number(selectedMapIssue.latitude).toFixed(4)}, {Number(selectedMapIssue.longitude).toFixed(4)}
                         </b>
                       </div>
                       <div>
-                        <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>Reported On</span>
+                        <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>{t("dateSubmitted")}</span>
                         <b style={{ color: "#0f172a" }}>
                           {selectedMapIssue.created_at ? new Date(selectedMapIssue.created_at).toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" }) : "Recently"}
                         </b>
@@ -1662,16 +1508,16 @@ function App() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
                       <div>
                         <div style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#166534" }}>
-                          Community Verification & Trust
+                          {t("communityVerification")}
                         </div>
                         <div style={{ fontSize: "13px", fontWeight: "800", color: "#0f172a" }}>
-                          {selectedMapIssue.upvotes_count || 0} Citizens Verified • {selectedMapIssue.downvotes_count || 0} Flagged
+                          {selectedMapIssue.upvotes_count || 0} {t("citizensVerified")} • {selectedMapIssue.downvotes_count || 0} {t("citizensFlagged")}
                         </div>
                       </div>
                       <div style={{ fontSize: "12px", fontWeight: "700", color: "#047857" }}>
                         {((Number(selectedMapIssue.upvotes_count) || 0) + (Number(selectedMapIssue.downvotes_count) || 0)) > 0
                           ? `${Math.round(((Number(selectedMapIssue.upvotes_count) || 0) / ((Number(selectedMapIssue.upvotes_count) || 0) + (Number(selectedMapIssue.downvotes_count) || 0))) * 100)}% Community Trust`
-                          : "Awaiting Community Votes"}
+                          : t("awaitingVotes")}
                       </div>
                     </div>
 
@@ -1732,16 +1578,16 @@ function App() {
                   <div style={{ background: "#ffffff", borderRadius: "10px", border: "1px solid #e2e8f0", padding: "16px", marginBottom: "16px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1px solid #f1f5f9", paddingBottom: "8px" }}>
                       <h4 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span>💬</span> Citizen Discussion ({mapComments.length})
+                        <span>💬</span> {t("citizenDiscussion")} ({mapComments.length})
                       </h4>
-                      <span style={{ fontSize: "11px", color: "#64748b" }}>Live on-ground updates & resident talk</span>
+                      <span style={{ fontSize: "11px", color: "#64748b" }}>{t("discussionSubtitle")}</span>
                     </div>
 
                     {/* Comments Stream */}
                     <div style={{ maxHeight: "240px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px", paddingRight: "4px" }}>
                       {mapComments.length === 0 ? (
                         <div style={{ padding: "18px", textAlign: "center", color: "#94a3b8", fontSize: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
-                          No comments on this report yet. Share your on-ground observation or update!
+                          {t("noCommentsYet")}
                         </div>
                       ) : (
                         mapComments.map((c) => (
@@ -1778,10 +1624,10 @@ function App() {
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2px" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                   <span style={{ fontSize: "12px", fontWeight: "700", color: "#0f172a" }}>
-                                    {c.user_name || "Citizen"}
+                                    {c.user_name || t("citizenRole")}
                                   </span>
                                   <span style={{ fontSize: "9px", background: "#dcfce7", color: "#166534", padding: "1px 5px", borderRadius: "4px", fontWeight: "700" }}>
-                                    ✓ Resident
+                                    ✓ {t("residentBadge")}
                                   </span>
                                   {c.user_city && (
                                     <span style={{ fontSize: "10px", color: "#94a3b8" }}>
@@ -1808,7 +1654,7 @@ function App() {
                         rows="2"
                         value={mapCommentText}
                         onChange={(e) => setMapCommentText(e.target.value)}
-                        placeholder={user ? `Write an update or comment as ${user.name.split(" ")[0]}...` : "Login to join the citizen discussion..."}
+                        placeholder={user ? (language === "hi" ? `${(user.name || "Citizen").split(" ")[0]} के रूप में टिप्पणी या अपडेट लिखें...` : `Write an update or comment as ${(user.name || "Citizen").split(" ")[0]}...`) : t("loginToCommentPrompt")}
                         disabled={!user || mapCommentPosting}
                         style={{
                           width: "100%",
@@ -1828,7 +1674,7 @@ function App() {
                           </span>
                         ) : (
                           <span style={{ fontSize: "11px", color: "#64748b" }}>
-                            Commenting as <b>{user.name}</b>
+                            {t("commentingAs")} <b>{user.name || "Citizen"}</b>
                           </span>
                         )}
                         <button
@@ -1848,7 +1694,7 @@ function App() {
                             gap: "6px",
                           }}
                         >
-                          <span>💬</span> {mapCommentPosting ? "Posting..." : "Post Comment"}
+                          <span>💬</span> {mapCommentPosting ? t("posting") : t("postComment")}
                         </button>
                       </div>
                     </form>
@@ -1857,7 +1703,7 @@ function App() {
                   {/* Modal Footer */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #e2e8f0", paddingTop: "14px" }}>
                     <span style={{ fontSize: "12px", color: "#64748b" }}>
-                      CivicWatch Community Verification & Transparency
+                      {t("modalFooterText")}
                     </span>
                     <button
                       type="button"
@@ -1873,7 +1719,7 @@ function App() {
                         cursor: "pointer",
                       }}
                     >
-                      Close / Back to Map
+                      {language === "hi" ? "बंद करें / नक्शे पर वापस जाएँ" : "Close / Back to Map"}
                     </button>
                   </div>
                 </div>
@@ -1902,13 +1748,13 @@ function App() {
                   <p>{tracked.error}</p>
                 ) : (
                   <>
-                    <h3>{tracked.category}</h3>
+                    <h3>{translateCategory(tracked.category, language)}</h3>
                     <p>{tracked.description}</p>
                     <p>
                       <b>{t("trackingId")}:</b> {tracked.tracking_id}
                     </p>
                     <p>
-                      <b>{t("department")}:</b> {tracked.department}
+                      <b>{t("department")}:</b> {translateAuthority(tracked.department, language)}
                     </p>
                     <p>
                       <b>{t("status")}:</b>{" "}
@@ -1922,15 +1768,15 @@ function App() {
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
                         <div>
                           <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#64748b" }}>
-                            Community Verification
+                            {t("communityVerification")}
                           </span>
                           <div style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>
-                            {tracked.upvotes_count || 0} Citizens Verified • {tracked.downvotes_count || 0} Flagged
+                            {tracked.upvotes_count || 0} {t("citizensVerified")} • {tracked.downvotes_count || 0} {t("citizensFlagged")}
                           </div>
                         </div>
                         {tracked.is_duplicate && (
                           <span style={{ fontSize: "11px", fontWeight: "800", color: "#854d0e", background: "#fef9c3", border: "1px solid #fef08a", padding: "3px 8px", borderRadius: "4px" }}>
-                            ⚠️ Merged Duplicate Issue
+                            ⚠️ {t("mergedDuplicateIssue")}
                           </span>
                         )}
                       </div>
@@ -1976,7 +1822,7 @@ function App() {
                             transition: "all 0.15s ease",
                           }}
                         >
-                          <span>👍</span> {tracked.userVote === "upvote" ? "Verified by You" : "Verify Issue (Upvote)"}
+                          <span>👍</span> {tracked.userVote === "upvote" ? t("verifiedByYou") : t("verifyIssue")}
                         </button>
 
                         <button
@@ -2019,7 +1865,7 @@ function App() {
                             transition: "all 0.15s ease",
                           }}
                         >
-                          <span>👎</span> {tracked.userVote === "downvote" ? "Flagged by You" : "Flag Duplicate/Fake"}
+                          <span>👎</span> {tracked.userVote === "downvote" ? t("flaggedByYou") : t("flagIssue")}
                         </button>
                       </div>
                     </div>
@@ -2028,16 +1874,16 @@ function App() {
                     <div style={{ marginTop: "16px", padding: "16px", background: "white", borderRadius: "10px", border: "1px solid #e2e8e5", boxShadow: "0 1px 4px rgba(0,0,0,0.03)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1px solid #f1f5f9", paddingBottom: "8px" }}>
                         <h4 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span>💬</span> Citizen Discussion ({trackedComments.length})
+                          <span>💬</span> {t("citizenDiscussion")} ({trackedComments.length})
                         </h4>
-                        <span style={{ fontSize: "11px", color: "#64748b" }}>Ground updates & resident talk</span>
+                        <span style={{ fontSize: "11px", color: "#64748b" }}>{t("discussionSubtitle")}</span>
                       </div>
 
                       {/* Comments Stream */}
                       <div style={{ maxHeight: "280px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
                         {trackedComments.length === 0 ? (
                           <div style={{ padding: "18px", textAlign: "center", color: "#94a3b8", fontSize: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
-                            No citizen comments yet. Be the first to share an update about this issue!
+                            {t("noCommentsYet")}
                           </div>
                         ) : (
                           trackedComments.map((c) => (
@@ -2074,10 +1920,10 @@ function App() {
                                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2px" }}>
                                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                     <span style={{ fontSize: "12px", fontWeight: "700", color: "#0f172a" }}>
-                                      {c.user_name || "Citizen"}
+                                      {c.user_name || t("citizenRole")}
                                     </span>
                                     <span style={{ fontSize: "9px", background: "#dcfce7", color: "#166534", padding: "1px 5px", borderRadius: "4px", fontWeight: "700" }}>
-                                      ✓ Resident
+                                      ✓ {t("residentBadge")}
                                     </span>
                                   </div>
                                   <span style={{ fontSize: "10px", color: "#94a3b8" }}>
@@ -2099,7 +1945,7 @@ function App() {
                           rows="2"
                           value={newCommentText}
                           onChange={(e) => setNewCommentText(e.target.value)}
-                          placeholder={user ? "Write a comment or on-ground update as " + user.name.split(" ")[0] + "..." : "Login to join the citizen discussion..."}
+                          placeholder={user ? (language === "hi" ? `${(user.name || "Citizen").split(" ")[0]} के रूप में टिप्पणी या अपडेट लिखें...` : `Write a comment or on-ground update as ${(user.name || "Citizen").split(" ")[0]}...`) : t("loginToCommentPrompt")}
                           disabled={!user || commentPosting}
                           style={{
                             width: "100%",
@@ -2129,7 +1975,7 @@ function App() {
                               gap: "6px",
                             }}
                           >
-                            <span>➤</span> {commentPosting ? "Posting..." : "Post Comment"}
+                            <span>➤</span> {commentPosting ? t("posting") : t("postComment")}
                           </button>
                         </div>
                       </form>

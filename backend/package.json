@@ -4,8 +4,9 @@
   "description": "Beginner-friendly Express and PostgreSQL API for CivicWatch",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
+    "start": "python3 app.py",
+    "dev": "python3 app.py",
+    "node:start": "node server.js",
     "migrate": "node migrate.js",
     "admin:create": "node createAdmin.js",
     "db:start": "start-postgres.bat"

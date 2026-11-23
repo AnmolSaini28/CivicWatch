@@ -10,6 +10,7 @@ import {
 
 import "leaflet/dist/leaflet.css";
 import "./admin.css";
+import { translations, translateStatus, translateCategory, translateAuthority, translatePrivacy, translateGender } from "./translations";
 
 const API =
   import.meta.env.VITE_API_URL || "http://localhost:5001/api";
@@ -103,7 +104,17 @@ export default function AdminDashboard({
   token: initialToken,
   admin: initialAdmin,
   onLogout,
+  language: propLang,
+  setLanguage: propSetLang,
 }) {
+  const [internalLang, setInternalLang] = useState(() => localStorage.getItem("cw_language") === "hi" ? "hi" : "en");
+  const language = propLang || internalLang;
+  const changeLanguage = (newLang) => {
+    localStorage.setItem("cw_language", newLang);
+    setInternalLang(newLang);
+    if (propSetLang) propSetLang(newLang);
+  };
+  const t = (key) => translations[language]?.[key] ?? translations.en[key] ?? key;
   const [token, setToken] = useState(() => initialToken || localStorage.getItem("cw_admin_token") || "");
   const [admin, setAdmin] = useState(() => {
     if (initialAdmin) return initialAdmin;
@@ -275,7 +286,7 @@ export default function AdminDashboard({
   };
 
   const handleDeleteComment = async (commentId) => {
-    if (!window.confirm("Are you sure you want to delete this comment?")) return;
+    if (!window.confirm(t("confirmDeleteComment"))) return;
     try {
       await axios.delete(`${API}/comments/${commentId}`);
       setAdminComments((prev) => prev.filter((c) => c.id !== commentId));
@@ -291,7 +302,7 @@ export default function AdminDashboard({
         )
       );
     } catch {
-      alert("Failed to delete comment.");
+      alert(t("failedDeleteComment"));
     }
   };
 
@@ -309,7 +320,7 @@ export default function AdminDashboard({
         prev.map((i) => (i.id === issueId ? { ...i, is_duplicate: res.data.issue.is_duplicate } : i))
       );
     } catch {
-      alert("Failed to update duplicate status.");
+      alert(t("failedUpdateDuplicate"));
     }
   };
 
@@ -718,7 +729,7 @@ export default function AdminDashboard({
             <div className="cw-brand-icon">CW</div>
             <div>
               <strong style={{ fontSize: "18px" }}>CivicWatch</strong>
-              <span style={{ fontSize: "11px", color: "#64748b", display: "block" }}>ADMIN PORTAL LOGIN</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: "11px", color: "#64748b", display: "block" }}>{t("adminLoginTitle")}</span><select value={language} onChange={(e) => changeLanguage(e.target.value)} style={{ padding: "2px 6px", fontSize: "11px", borderRadius: "4px", border: "1px solid #cbd5e1", background: "#f8fafc" }}><option value="en">English</option><option value="hi">हिन्दी</option></select></div>
             </div>
           </div>
           {loginError && (
@@ -726,7 +737,7 @@ export default function AdminDashboard({
           )}
           <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={{ fontSize: "12px", fontWeight: "600" }}>Admin Email</label>
+              <label style={{ fontSize: "12px", fontWeight: "600" }}>{t("adminEmail")}</label>
               <input
                 type="email"
                 value={loginEmail}
@@ -737,7 +748,7 @@ export default function AdminDashboard({
               />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={{ fontSize: "12px", fontWeight: "600" }}>Password</label>
+              <label style={{ fontSize: "12px", fontWeight: "600" }}>{t("password")}</label>
               <input
                 type="password"
                 value={loginPassword}
@@ -752,11 +763,11 @@ export default function AdminDashboard({
               disabled={loginBusy}
               style={{ padding: "11px", background: "#0b3d2e", color: "white", border: "none", borderRadius: "6px", fontWeight: "600", cursor: "pointer", marginTop: "6px" }}
             >
-              {loginBusy ? "Logging in..." : "Login to Admin Portal"}
+              {loginBusy ? t("loggingIn") : t("loginToAdmin")}
             </button>
             <div style={{ marginTop: "6px" }}>
               <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", display: "block", marginBottom: "6px" }}>
-                Test Hierarchy Accounts:
+                {t("testHierarchyAccounts")}
               </span>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                 <button
@@ -806,7 +817,7 @@ export default function AdminDashboard({
               onClick={onLogout}
               style={{ background: "transparent", border: "none", color: "#0b3d2e", fontSize: "13px", cursor: "pointer", marginTop: "10px", textDecoration: "underline" }}
             >
-              ← Back to Citizen Portal
+              {t("backToCitizenPortal")}
             </button>
           </form>
         </div>
@@ -824,19 +835,19 @@ export default function AdminDashboard({
           <div className="cw-brand-icon">CW</div>
           <div>
             <strong>CivicWatch</strong>
-            <span>ADMIN PORTAL</span>
+            <span>{t("adminPortal")}</span>
           </div>
         </div>
 
         <nav className="cw-navigation">
           {[
-            ["Overview", "▦"],
-            ["Complaints", "▤"],
-            ["Live Issue Map", "⌖"],
-            ["Departments", "▥"],
-            ["Users", "♙"],
-            ["Analytics", "▧"],
-          ].map(([name, icon]) => (
+            ["Overview", "▦", t("overviewTab")],
+            ["Complaints", "▤", t("complaintsTab")],
+            ["Live Issue Map", "⌖", t("liveIssueMapTab")],
+            ["Departments", "▥", t("departmentsTab")],
+            ["Users", "♙", t("usersTab")],
+            ["Analytics", "▧", t("analyticsTab")],
+          ].map(([name, icon, label]) => (
             <button
               key={name}
               className={
@@ -845,7 +856,7 @@ export default function AdminDashboard({
               onClick={() => switchTab(name)}
             >
               <span>{icon}</span>
-              {name}
+              {label}
             </button>
           ))}
         </nav>
@@ -857,7 +868,7 @@ export default function AdminDashboard({
             </div>
             <div>
               <strong>{admin?.name || "Administrator"}</strong>
-              <span>Administrator</span>
+              <span>{t("adminRole")}</span>
             </div>
           </div>
 
@@ -865,7 +876,7 @@ export default function AdminDashboard({
             className="cw-logout"
             onClick={handleLogout}
           >
-            ↪ Logout
+            ↪ {t("logout")}
           </button>
 
           <button
@@ -873,7 +884,7 @@ export default function AdminDashboard({
             onClick={onLogout}
             style={{ marginTop: "6px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)" }}
           >
-            ← Citizen Portal
+            ← {t("citizenPortalLink")}
           </button>
         </div>
       </aside>
@@ -884,7 +895,14 @@ export default function AdminDashboard({
         <header className="cw-header">
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-              <h1>{activePage}</h1>
+              <h1>
+                {activePage === "Overview" ? t("overviewTab") :
+                 activePage === "Complaints" ? t("complaintsTab") :
+                 activePage === "Live Issue Map" ? t("liveIssueMapTab") :
+                 activePage === "Departments" ? t("departmentsTab") :
+                 activePage === "Users" ? t("usersTab") :
+                 activePage === "Analytics" ? t("analyticsTab") : activePage}
+              </h1>
               <span
                 style={{
                   fontSize: "11px",
@@ -898,26 +916,45 @@ export default function AdminDashboard({
                 }}
               >
                 {admin?.admin_level === "NATIONAL"
-                  ? "🇮🇳 NATIONAL (PAN-INDIA)"
+                  ? `🇮🇳 ${t("nationalPanIndia")}`
                   : admin?.admin_level === "STATE"
-                    ? `🚩 STATE: ${admin.state}`
+                    ? `🚩 ${t("stateLevel")}: ${admin.state}`
                     : admin?.admin_level === "BLOCK"
-                      ? `📍 BLOCK: ${admin.block} (${admin.city})`
-                      : `🏙️ CITY: ${admin?.city || "MUMBAI"}`}
+                      ? `📍 ${t("blockLevel")}: ${admin.block} (${admin.city})`
+                      : `🏙️ ${t("cityLevel")}: ${admin?.city || "MUMBAI"}`}
               </span>
             </div>
-            <p>
-              Monitor and manage civic issues across departments
-            </p>
+            <p>{t("adminSubtitle")}</p>
           </div>
 
           <div className="cw-header-actions">
+            {/* Language Switcher */}
+            <select
+              aria-label="Language"
+              value={language}
+              onChange={(e) => changeLanguage(e.target.value)}
+              style={{
+                background: "#082f26",
+                color: "#ffffff",
+                border: "1px solid #16a34a",
+                borderRadius: "8px",
+                padding: "6px 12px",
+                fontSize: "12px",
+                fontWeight: "700",
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="en" style={{ background: "#082f26", color: "white" }}>English</option>
+              <option value="hi" style={{ background: "#082f26", color: "white" }}>हिन्दी</option>
+            </select>
+
             <button
               className="cw-refresh"
               onClick={loadData}
               disabled={loading}
             >
-              ↻ Refresh
+              ↻ {t("refresh")}
             </button>
 
             <span className="cw-header-user">
@@ -930,7 +967,7 @@ export default function AdminDashboard({
               onClick={handleLogout}
               title="Logout from Admin Portal"
             >
-              ↪ Logout
+              ↪ {t("logout")}
             </button>
           </div>
         </header>
@@ -960,25 +997,25 @@ export default function AdminDashboard({
 
                 <div className="cw-stat-grid">
                   <StatCard
-                    label="Total Complaints"
+                    label={t("totalComplaints")}
                     value={stats.total}
                     color="green"
                   />
 
                   <StatCard
-                    label="Pending"
+                    label={t("pending")}
                     value={stats.pending}
                     color="orange"
                   />
 
                   <StatCard
-                    label="In Progress"
+                    label={t("inProgress")}
                     value={stats.inProgress}
                     color="blue"
                   />
 
                   <StatCard
-                    label="Resolved"
+                    label={t("resolved")}
                     value={stats.resolved}
                     color="green"
                   />
@@ -988,8 +1025,8 @@ export default function AdminDashboard({
 
                   <section className="cw-panel cw-wide">
                     <div className="cw-panel-heading">
-                      <h2>Complaint Trends</h2>
-                      <span>Last 6 months</span>
+                      <h2>{t("complaintTrends")}</h2>
+                      <span>{t("last6Months")}</span>
                     </div>
 
                     <MonthlyChart
@@ -1000,25 +1037,27 @@ export default function AdminDashboard({
 
                   <section className="cw-panel">
                     <div className="cw-panel-heading">
-                      <h2>Complaint Status</h2>
+                      <h2>{t("complaintStatus")}</h2>
                     </div>
 
-                    <StatusChart stats={stats} />
+                    <StatusChart stats={stats} language={language} t={t} />
                   </section>
 
                 </div>
 
                 <section className="cw-panel">
                   <div className="cw-panel-heading">
-                    <h2>Recent Complaints</h2>
+                    <h2>{language === "hi" ? "हाल की शिकायतें" : "Recent Complaints"}</h2>
                     <button
                       onClick={() => switchTab("Complaints")}
                     >
-                      View all →
+                      {t("viewAll")} →
                     </button>
                   </div>
 
                   <ComplaintTable
+                      language={language}
+                      t={t}
                     issues={searchedIssues.slice(0, 5)}
                     draftUpdates={draftUpdates}
                     setDraftUpdates={setDraftUpdates}
@@ -1036,19 +1075,19 @@ export default function AdminDashboard({
               <section className="cw-panel">
 
                 <div className="cw-panel-heading">
-                  <h2>All Complaints ({searchedIssues.length})</h2>
+                  <h2>{t("allComplaints")} ({searchedIssues.length})</h2>
 
                   <button onClick={exportCSV}>
-                    Export CSV
+                    {t("exportCSV")}
                   </button>
                 </div>
 
                 <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap", alignItems: "center" }}>
                   {[
-                    ["All", ""],
-                    ["🟠 Pending", "Pending"],
-                    ["🔵 In Progress", "In Progress"],
-                    ["🟢 Resolved", "Resolved"],
+                    [t("all"), ""],
+                    [`🟠 ${t("pending")}`, "Pending"],
+                    [`🔵 ${t("inProgress")}`, "In Progress"],
+                    [`🟢 ${t("resolved")}`, "Resolved"],
                   ].map(([label, val]) => (
                     <button
                       key={label}
@@ -1103,9 +1142,9 @@ export default function AdminDashboard({
                         boxShadow: priorityFilter ? "0 2px 4px rgba(0,0,0,0.12)" : "none",
                         transition: "all 0.15s ease",
                       }}
-                      title="Filter and sort by seriousness based on Likes, Dislikes, and Comments"
+                      title={language === "hi" ? "लाइक, डिसलाइक और टिप्पणियों के आधार पर गंभीरता अनुसार क्रमबद्ध करें" : "Filter and sort by seriousness based on Likes, Dislikes, and Comments"}
                     >
-                      <span>⚡ Priority</span>
+                      <span>⚡ {t("priority")}</span>
                       {priorityFilter && (
                         <span
                           style={{
@@ -1117,12 +1156,12 @@ export default function AdminDashboard({
                           }}
                         >
                           {priorityFilter === "high"
-                            ? "🔴 High"
+                            ? `🔴 ${t("priorityHigh")}`
                             : priorityFilter === "mid"
-                              ? "🟡 Mid"
+                              ? `🟡 ${t("priorityMid")}`
                               : priorityFilter === "low"
-                                ? "🟢 Low"
-                                : "All"}
+                                ? `🟢 ${t("priorityLow")}`
+                                : t("all")}
                         </span>
                       )}
                       <span style={{ fontSize: "10px" }}>▾</span>
@@ -1189,7 +1228,7 @@ export default function AdminDashboard({
                           }}
                         >
                           <div>
-                            <div style={{ fontWeight: "700" }}>All (Pending & In Progress)</div>
+                            <div style={{ fontWeight: "700" }}>{t("allPriorities")} ({t("pending")} & {t("inProgress")})</div>
                             <div style={{ fontSize: "11px", color: "#64748b" }}>
                               Sorted by seriousness (high to low)
                             </div>
@@ -1418,12 +1457,14 @@ export default function AdminDashboard({
 
                 <input
                   className="cw-search"
-                  placeholder="Search issue ID, title, city..."
+                  placeholder={t("searchComplaintsPlaceholder")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
 
                 <ComplaintTable
+                      language={language}
+                      t={t}
                   issues={searchedIssues}
                   draftUpdates={draftUpdates}
                   setDraftUpdates={setDraftUpdates}
@@ -1440,9 +1481,9 @@ export default function AdminDashboard({
               <section className="cw-panel">
 
                 <div className="cw-panel-heading">
-                  <h2>Reported Issue Locations</h2>
+                  <h2>{t("reportedIssueLocations")}</h2>
                   <span>
-                    {mapIssues.length} mapped complaints
+                    {mapIssues.length} {t("mappedComplaints")}
                   </span>
                 </div>
 
@@ -1481,9 +1522,9 @@ export default function AdminDashboard({
                           <br />
                           {issue.tracking_id}
                           <br />
-                          {issue.city || "City not specified"}
+                          {issue.city || (language === "hi" ? "शहर निर्दिष्ट नहीं" : "City not specified")}
                           <br />
-                          Status: {issue.status}
+                          {t("status")}: {translateStatus(issue.status, language)}
                         </Popup>
                       </CircleMarker>
                     ))}
@@ -1491,7 +1532,7 @@ export default function AdminDashboard({
                 </div>
 
                 <p className="cw-muted">
-                  Only complaints with valid coordinates appear on the map.
+                  {t("onlyValidCoordinatesAppear")}
                 </p>
 
               </section>
@@ -1502,7 +1543,7 @@ export default function AdminDashboard({
               <section className="cw-panel">
 
                 <div className="cw-panel-heading">
-                  <h2>Department Performance</h2>
+                  <h2>{t("departmentPerformance")}</h2>
                 </div>
 
                 <div className="cw-data-list">
@@ -1522,9 +1563,9 @@ export default function AdminDashboard({
                     return (
                       <div className="cw-department-row" key={name}>
                         <div>
-                          <strong>{name}</strong>
+                          <strong>{translateAuthority(name, language)}</strong>
                           <span>
-                            {count} complaints · {resolved} resolved
+                            {count} {language === "hi" ? "शिकायतें" : "complaints"} · {resolved} {t("resolvedCount")}
                           </span>
                         </div>
 
@@ -1548,7 +1589,7 @@ export default function AdminDashboard({
               <section className="cw-panel">
 
                 <div className="cw-panel-heading">
-                  <h2>Registered Users ({users.length})</h2>
+                  <h2>{t("registeredUsers")} ({users.length})</h2>
                 </div>
 
                 <div className="cw-table-wrap">
@@ -1556,11 +1597,11 @@ export default function AdminDashboard({
                     <thead>
                       <tr>
                         <th>ID</th>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Mobile</th>
-                        <th>Complaints</th>
-                        <th>Joined</th>
+                        <th>{t("name")}</th>
+                        <th>{t("email")}</th>
+                        <th>{t("mobile")}</th>
+                        <th>{t("complaintsTab")}</th>
+                        <th>{t("joined")}</th>
                       </tr>
                     </thead>
 
@@ -1578,7 +1619,7 @@ export default function AdminDashboard({
 
                       {users.length === 0 && (
                         <tr>
-                          <td colSpan="6">No users found.</td>
+                          <td colSpan="6">{t("noUsersFound")}</td>
                         </tr>
                       )}
                     </tbody>
@@ -1596,9 +1637,9 @@ export default function AdminDashboard({
 
                   <div className="cw-panel-heading">
                     <div>
-                      <h2>Complaint Analytics</h2>
+                      <h2>{t("complaintAnalytics")}</h2>
                       <p className="cw-muted">
-                        Apply multiple filters to analyse complaints.
+                        {t("analyticsSubtitle")}
                       </p>
                     </div>
 
@@ -1606,42 +1647,46 @@ export default function AdminDashboard({
                       className="cw-clear"
                       onClick={clearFilters}
                     >
-                      Clear Filters
+                      {t("clearFilters")}
                     </button>
                   </div>
 
                   <div className="cw-filter-grid">
 
                     <FilterSelect
-                      label="City"
+                      label={t("cityFilter")}
                       value={filters.city}
                       onChange={(v) => updateFilter("city", v)}
                       options={cities}
+                      language={language}
                     />
 
                     <FilterSelect
-                      label="Issue Type"
+                      label={t("issueTypeFilter")}
                       value={filters.category}
                       onChange={(v) => updateFilter("category", v)}
                       options={categories}
+                      language={language}
                     />
 
                     <FilterSelect
-                      label="Status"
+                      label={t("status")}
                       value={filters.status}
                       onChange={(v) => updateFilter("status", v)}
                       options={STATUSES}
+                      language={language}
                     />
 
                     <FilterSelect
-                      label="Department"
+                      label={t("department")}
                       value={filters.department}
                       onChange={(v) => updateFilter("department", v)}
                       options={departments}
+                      language={language}
                     />
 
                     <div className="cw-filter-field">
-                      <label>Month</label>
+                      <label>{t("monthFilter")}</label>
                       <input
                         type="month"
                         value={filters.month}
@@ -1652,7 +1697,7 @@ export default function AdminDashboard({
                     </div>
 
                     <div className="cw-filter-field">
-                      <label>From Date</label>
+                      <label>{t("fromDate")}</label>
                       <input
                         type="date"
                         value={filters.from}
@@ -1664,7 +1709,7 @@ export default function AdminDashboard({
                     </div>
 
                     <div className="cw-filter-field">
-                      <label>To Date</label>
+                      <label>{t("toDate")}</label>
                       <input
                         type="date"
                         value={filters.to}
@@ -1679,13 +1724,11 @@ export default function AdminDashboard({
 
                   <div className="cw-filter-footer">
                     <span>
-                      {hasFilters
-                        ? "Filters applied"
-                        : "Showing all complaints"}
+                      {hasFilters ? t("filtersApplied") : t("showingAllComplaints")}
                     </span>
 
                     <strong>
-                      {filteredIssues.length} results
+                      {filteredIssues.length} {t("resultsCount")}
                     </strong>
                   </div>
 
@@ -1693,25 +1736,25 @@ export default function AdminDashboard({
 
                 <div className="cw-stat-grid">
                   <StatCard
-                    label="Total Complaints"
+                    label={t("totalComplaints")}
                     value={stats.total}
                     color="green"
                   />
 
                   <StatCard
-                    label="Pending"
+                    label={t("pending")}
                     value={stats.pending}
                     color="orange"
                   />
 
                   <StatCard
-                    label="In Progress"
+                    label={t("inProgress")}
                     value={stats.inProgress}
                     color="blue"
                   />
 
                   <StatCard
-                    label="Resolved"
+                    label={t("resolved")}
                     value={stats.resolved}
                     color="green"
                   />
@@ -1720,18 +1763,20 @@ export default function AdminDashboard({
                 <div className="cw-overview-grid">
 
                   <section className="cw-panel">
-                    <h2>City-wise Complaints</h2>
+                    <h2>{t("cityWiseComplaints")}</h2>
 
                     <HorizontalChart
                       data={cityStats}
+                      language={language}
                     />
                   </section>
 
                   <section className="cw-panel">
-                    <h2>Issue-wise Complaints</h2>
+                    <h2>{t("issueWiseComplaints")}</h2>
 
                     <HorizontalChart
                       data={categoryStats}
+                      language={language}
                     />
                   </section>
 
@@ -1739,8 +1784,8 @@ export default function AdminDashboard({
 
                 <section className="cw-panel">
                   <div className="cw-panel-heading">
-                    <h2>Month-wise Complaints</h2>
-                    <span>Last 6 months</span>
+                    <h2>{t("monthWiseComplaints")}</h2>
+                    <span>{t("last6Months")}</span>
                   </div>
 
                   <MonthlyChart
@@ -1751,21 +1796,23 @@ export default function AdminDashboard({
 
                 <section className="cw-panel">
                   <div className="cw-panel-heading">
-                    <h2>Filtered Complaint Records</h2>
+                    <h2>{t("filteredRecords")}</h2>
 
                     <button onClick={exportCSV}>
-                      Export CSV
+                      {t("exportCSV")}
                     </button>
                   </div>
 
                   <input
                     className="cw-search"
-                    placeholder="Search filtered complaints..."
+                    placeholder={t("searchFilteredPlaceholder")}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
 
                   <ComplaintTable
+                      language={language}
+                      t={t}
                     issues={searchedIssues}
                     draftUpdates={draftUpdates}
                     setDraftUpdates={setDraftUpdates}
@@ -1832,16 +1879,16 @@ export default function AdminDashboard({
                 </div>
               ) : (
                 <div style={{ padding: "20px", background: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1", textAlign: "center", color: "#64748b", marginBottom: "16px", fontSize: "13px" }}>
-                  📷 No photo uploaded for this report.
+                  📷 {t("noPhotoUploaded")}
                 </div>
               )}
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px", marginBottom: "16px" }}>
-                <div><strong>Status:</strong> <span className={`cw-status-select ${selectedIssue.status.toLowerCase().replace(/\s+/g, "")}`} style={{ padding: "3px 8px", borderRadius: "10px" }}>{selectedIssue.status}</span></div>
+                <div><strong>{t("status")}:</strong> <span className={`cw-status-select ${selectedIssue.status.toLowerCase().replace(/\s+/g, "")}`} style={{ padding: "3px 8px", borderRadius: "10px" }}>{translateStatus(selectedIssue.status, language)}</span></div>
                 <div>
-                  <strong>Priority:</strong>{" "}
+                  <strong>{t("priority")}:</strong>{" "}
                   {selectedIssue.status === "Resolved" ? (
-                    <span style={{ fontSize: "12px", color: "#64748b" }}>Resolved</span>
+                    <span style={{ fontSize: "12px", color: "#64748b" }}>{t("resolved")}</span>
                   ) : (
                     (() => {
                       const score = calculateSeriousness(selectedIssue);
@@ -1858,34 +1905,34 @@ export default function AdminDashboard({
                             border: `1px solid ${level === "high" ? "#fecaca" : level === "mid" ? "#fef08a" : "#bbf7d0"}`,
                           }}
                         >
-                          {level === "high" ? "🔴 High" : level === "mid" ? "🟡 Mid" : "🟢 Low"} (Score: {score})
+                          {(level === "high" ? `🔴 ${t("priorityHigh")}` : level === "mid" ? `🟡 ${t("priorityMid")}` : `🟢 ${t("priorityLow")}`)} ({score})
                         </span>
                       );
                     })()
                   )}
                 </div>
-                <div><strong>Department:</strong> {selectedIssue.department}</div>
-                <div><strong>Location:</strong> {selectedIssue.city || "City not specified"}</div>
-                <div><strong>Reported By:</strong> {selectedIssue.reported_by || "Anonymous Citizen"}</div>
-                <div><strong>Reported Date:</strong> {formatDate(selectedIssue.created_at)}</div>
-                <div><strong>Resolved Date:</strong> {formatDate(selectedIssue.resolved_at)}</div>
+                <div><strong>{t("department")}:</strong> {translateAuthority(selectedIssue.department, language)}</div>
+                <div><strong>{t("location")}:</strong> {selectedIssue.city || (language === "hi" ? "शहर निर्दिष्ट नहीं" : "City not specified")}</div>
+                <div><strong>{t("reportedBy")}:</strong> {selectedIssue.reported_by || t("anonymousCitizen")}</div>
+                <div><strong>{t("reportedDate")}:</strong> {formatDate(selectedIssue.created_at)}</div>
+                <div><strong>{t("resolvedDate")}:</strong> {formatDate(selectedIssue.resolved_at)}</div>
               </div>
 
               <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "6px", marginBottom: "16px" }}>
-                <strong style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "4px" }}>Description:</strong>
-                <p style={{ margin: 0, fontSize: "13px", color: "#1e293b", whiteSpace: "pre-wrap" }}>{selectedIssue.description || "No description provided."}</p>
+                <strong style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "4px" }}>{t("description")}:</strong>
+                <p style={{ margin: 0, fontSize: "13px", color: "#1e293b", whiteSpace: "pre-wrap" }}>{selectedIssue.description || t("noDescription")}</p>
               </div>
 
               {selectedIssue.latitude && selectedIssue.longitude && (
                 <div style={{ marginBottom: "16px", fontSize: "12px" }}>
-                  <strong>GPS Coordinates:</strong> {selectedIssue.latitude}, {selectedIssue.longitude}{" "}
+                  <strong>{t("gpsCoordinates")}:</strong> {selectedIssue.latitude}, {selectedIssue.longitude}{" "}
                   <a
                     href={`https://www.google.com/maps?q=${selectedIssue.latitude},${selectedIssue.longitude}`}
                     target="_blank"
                     rel="noreferrer"
                     style={{ color: "#2563eb", marginLeft: "6px" }}
                   >
-                    View on Google Maps ↗
+                    {t("viewOnGoogleMaps")}
                   </a>
                 </div>
               )}
@@ -1895,14 +1942,14 @@ export default function AdminDashboard({
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
                   <div>
                     <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#64748b" }}>
-                      Community Verification & Trust
+                      {t("communityVerificationTrust")}
                     </span>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
                       <span style={{ fontSize: "12px", fontWeight: "700", color: "#166534", background: "#dcfce7", padding: "2px 8px", borderRadius: "10px", border: "1px solid #bbf7d0" }}>
-                        👍 {selectedIssue.upvotes_count || 0} Citizens Verified
+                        👍 {selectedIssue.upvotes_count || 0} {t("citizensVerified")}
                       </span>
                       <span style={{ fontSize: "12px", fontWeight: "700", color: "#991b1b", background: "#fee2e2", padding: "2px 8px", borderRadius: "10px", border: "1px solid #fecaca" }}>
-                        👎 {selectedIssue.downvotes_count || 0} Flagged
+                        👎 {selectedIssue.downvotes_count || 0} {t("citizensFlagged")}
                       </span>
                     </div>
                   </div>
@@ -1924,7 +1971,7 @@ export default function AdminDashboard({
                       gap: "4px",
                     }}
                   >
-                    <span>⚠️</span> {selectedIssue.is_duplicate ? "Duplicate Flagged (Click to Unlink)" : "Mark as Duplicate"}
+                    <span>⚠️</span> {selectedIssue.is_duplicate ? t("duplicateFlaggedUnlink") : t("markAsDuplicate")}
                   </button>
                 </div>
 
@@ -1932,16 +1979,16 @@ export default function AdminDashboard({
                 <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "10px", marginTop: "10px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                     <strong style={{ fontSize: "12px", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span>💬</span> Ground Citizen Discussion ({adminComments.length})
+                      <span>💬</span> {t("groundCitizenDiscussion")} ({adminComments.length})
                     </strong>
-                    <span style={{ fontSize: "11px", color: "#64748b" }}>Review citizen updates before dispatch</span>
+                    <span style={{ fontSize: "11px", color: "#64748b" }}>{t("reviewBeforeDispatch")}</span>
                   </div>
 
                   {adminCommentsLoading ? (
-                    <div style={{ padding: "10px", textAlign: "center", fontSize: "12px", color: "#64748b" }}>Loading comments...</div>
+                    <div style={{ padding: "10px", textAlign: "center", fontSize: "12px", color: "#64748b" }}>{t("loadingComments")}</div>
                   ) : adminComments.length === 0 ? (
                     <div style={{ padding: "10px", textAlign: "center", fontSize: "12px", color: "#94a3b8", background: "white", borderRadius: "6px", border: "1px dashed #cbd5e1" }}>
-                      No comments posted on this issue.
+                      {t("noCommentsPosted")}
                     </div>
                   ) : (
                     <div style={{ maxHeight: "160px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -1962,7 +2009,7 @@ export default function AdminDashboard({
                           <div>
                             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                               <span style={{ fontSize: "11px", fontWeight: "700", color: "#0f172a" }}>
-                                {c.user_name || "Citizen"}
+                                {c.user_name || t("anonymousCitizen")}
                               </span>
                               <span style={{ fontSize: "10px", color: "#94a3b8" }}>
                                 {new Date(c.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -1985,7 +2032,7 @@ export default function AdminDashboard({
                             }}
                             title="Moderate / Delete comment"
                           >
-                            🗑️ Delete
+                            🗑️ {t("delete")}
                           </button>
                         </div>
                       ))}
@@ -2005,7 +2052,7 @@ export default function AdminDashboard({
                       }}
                       style={{ padding: "7px 12px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: "5px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}
                     >
-                      Mark In Progress
+                      {t("markInProgress")}
                     </button>
                   )}
                   {selectedIssue.status !== "Resolved" && (
@@ -2017,7 +2064,7 @@ export default function AdminDashboard({
                       }}
                       style={{ padding: "7px 12px", background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0", borderRadius: "5px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}
                     >
-                      ✓ Mark Resolved
+                      {t("markResolved")}
                     </button>
                   )}
                 </div>
@@ -2027,7 +2074,7 @@ export default function AdminDashboard({
                   onClick={() => setSelectedIssue(null)}
                   style={{ padding: "7px 14px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "5px", cursor: "pointer", fontSize: "12px" }}
                 >
-                  Close
+                  {t("close")}
                 </button>
               </div>
             </div>
@@ -2035,7 +2082,7 @@ export default function AdminDashboard({
         )}
 
         <footer className="cw-footer">
-          CivicWatch Admin Portal
+          CivicWatch {t("adminPortal")}
         </footer>
 
       </main>
@@ -2061,6 +2108,7 @@ function FilterSelect({
   value,
   onChange,
   options,
+  language = "en",
 }) {
   return (
     <div className="cw-filter-field">
@@ -2070,11 +2118,19 @@ function FilterSelect({
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
-        <option value="">All {label}</option>
+        <option value="">{language === "hi" ? "सभी" : "All"} {label}</option>
 
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {language === "hi"
+              ? (translateStatus(option, language) !== option
+                  ? translateStatus(option, language)
+                  : translateCategory(option, language) !== option
+                    ? translateCategory(option, language)
+                    : translateAuthority(option, language) !== option
+                      ? translateAuthority(option, language)
+                      : option)
+              : option}
           </option>
         ))}
       </select>
@@ -2082,7 +2138,7 @@ function FilterSelect({
   );
 }
 
-function StatusChart({ stats }) {
+function StatusChart({ stats, language = "en", t = (k) => k }) {
   const total = stats.total || 1;
 
   const pending = (stats.pending / total) * 100;
@@ -2105,14 +2161,14 @@ function StatusChart({ stats }) {
       >
         <div>
           <strong>{stats.total}</strong>
-          <span>Total</span>
+          <span>{language === "hi" ? "कुल" : "Total"}</span>
         </div>
       </div>
 
       <div className="cw-status-legend">
-        <span>🟢 Resolved: {stats.resolved}</span>
-        <span>🔵 In Progress: {stats.inProgress}</span>
-        <span>🟠 Pending: {stats.pending}</span>
+        <span>🟢 {t("resolved")}: {stats.resolved}</span>
+        <span>🔵 {t("inProgress")}: {stats.inProgress}</span>
+        <span>🟠 {t("pending")}: {stats.pending}</span>
       </div>
 
     </div>
@@ -2157,11 +2213,11 @@ function MonthlyChart({ data, max }) {
   );
 }
 
-function HorizontalChart({ data }) {
+function HorizontalChart({ data, language = "en" }) {
   const max = Math.max(1, ...data.map((item) => item[1]));
 
   if (!data.length) {
-    return <p className="cw-muted">No data available.</p>;
+    return <p className="cw-muted">{language === "hi" ? "कोई डेटा उपलब्ध नहीं।" : "No data available."}</p>;
   }
 
   return (
@@ -2170,7 +2226,7 @@ function HorizontalChart({ data }) {
       {data.map(([name, count]) => (
         <div className="cw-horizontal-row" key={name}>
 
-          <span>{name}</span>
+          <span>{language === "hi" ? (translateCategory(name, language) !== name ? translateCategory(name, language) : translateAuthority(name, language)) : name}</span>
 
           <div className="cw-horizontal-track">
             <div
@@ -2196,6 +2252,8 @@ function ComplaintTable({
   saveComplaint,
   departments,
   onSelectIssue,
+  language = "en",
+  t = (k) => k,
 }) {
   return (
     <div className="cw-table-wrap">
@@ -2203,16 +2261,16 @@ function ComplaintTable({
       <table>
         <thead>
           <tr>
-            <th>Issue ID</th>
-            <th>Photo</th>
-            <th>Issue / Location</th>
-            <th>Department</th>
-            <th>Community Trust</th>
-            <th>Discussion</th>
-            <th>Priority</th>
-            <th>Date</th>
-            <th>Status</th>
-            <th>Action</th>
+            <th>{t("issueId")}</th>
+            <th>{language === "hi" ? "फोटो" : "Photo"}</th>
+            <th>{t("issueAndLocation")}</th>
+            <th>{t("department")}</th>
+            <th>{t("communityTrust")}</th>
+            <th>{t("discussion")}</th>
+            <th>{t("priority")}</th>
+            <th>{t("date")}</th>
+            <th>{t("status")}</th>
+            <th>{t("action")}</th>
           </tr>
         </thead>
 
@@ -2241,7 +2299,7 @@ function ComplaintTable({
                       alt="Proof"
                       style={{ width: "36px", height: "36px", objectFit: "cover", borderRadius: "5px", cursor: "pointer", border: "1px solid #d8e0db" }}
                       onClick={() => onSelectIssue && onSelectIssue(issue)}
-                      title="Click to view photo"
+                      title={language === "hi" ? "फोटो देखने के लिए क्लिक करें" : "Click to view photo"}
                     />
                   ) : (
                     <div style={{ width: "36px", height: "36px", borderRadius: "5px", background: "#f1f5f9", display: "grid", placeItems: "center", fontSize: "14px", color: "#94a3b8" }}>
@@ -2255,7 +2313,7 @@ function ComplaintTable({
                   <span className="cw-cell-sub">
                     📍 {issue.block ? `${issue.block}, ` : ""}{issue.city || "Mumbai"}{issue.state ? ` • ${issue.state}` : ""}
                     {" · "}
-                    {issue.category}
+                    {translateCategory(issue.category, language)}
                   </span>
                 </td>
 
@@ -2274,7 +2332,7 @@ function ComplaintTable({
                   >
                     {departments.map((name) => (
                       <option key={name} value={name}>
-                        {name}
+                        {translateAuthority(name, language)}
                       </option>
                     ))}
                   </select>
@@ -2292,7 +2350,7 @@ function ComplaintTable({
                     </div>
                     {issue.is_duplicate && (
                       <span style={{ fontSize: "10px", fontWeight: "800", color: "#854d0e", background: "#fef9c3", border: "1px solid #fef08a", padding: "1px 5px", borderRadius: "4px" }}>
-                        ⚠️ Duplicate
+                        ⚠️ {t("duplicate")}
                       </span>
                     )}
                   </div>
@@ -2315,7 +2373,7 @@ function ComplaintTable({
                       alignItems: "center",
                       gap: "4px",
                     }}
-                    title="View citizen comments"
+                    title={language === "hi" ? "नागरिक टिप्पणियाँ देखें" : "View citizen comments"}
                   >
                     <span>💬</span> {issue.comments_count || 0}
                   </button>
@@ -2350,7 +2408,7 @@ function ComplaintTable({
                           }}
                           title={`High Priority • Seriousness Score: ${score} (Likes: ${issue.upvotes_count || 0}, Dislikes: ${issue.downvotes_count || 0}, Comments: ${issue.comments_count || 0})`}
                         >
-                          🔴 High ({score})
+                          🔴 {t("priorityHigh")} ({score})
                         </span>
                       );
                     }
@@ -2372,7 +2430,7 @@ function ComplaintTable({
                           }}
                           title={`Mid Priority • Seriousness Score: ${score} (Likes: ${issue.upvotes_count || 0}, Dislikes: ${issue.downvotes_count || 0}, Comments: ${issue.comments_count || 0})`}
                         >
-                          🟡 Mid ({score})
+                          🟡 {t("priorityMid")} ({score})
                         </span>
                       );
                     }
@@ -2393,7 +2451,7 @@ function ComplaintTable({
                         }}
                         title={`Low Priority • Seriousness Score: ${score} (Likes: ${issue.upvotes_count || 0}, Dislikes: ${issue.downvotes_count || 0}, Comments: ${issue.comments_count || 0})`}
                       >
-                        🟢 Low ({score})
+                        🟢 {t("priorityLow")} ({score})
                       </span>
                     );
                   })()}
@@ -2444,7 +2502,7 @@ function ComplaintTable({
                     disabled={!draftUpdates[issue.id]}
                     onClick={() => saveComplaint(issue)}
                   >
-                    Save
+                    {t("save")}
                   </button>
                 </td>
 
@@ -2455,7 +2513,7 @@ function ComplaintTable({
           {issues.length === 0 && (
             <tr>
               <td colSpan="10">
-                No complaints found.
+                {t("noComplaintsFound")}
               </td>
             </tr>
           )}
