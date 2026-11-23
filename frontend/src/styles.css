@@ -269,8 +269,8 @@ h3 {
 
 /* Issue marker popups */
 .issue-popup {
-  min-width: 190px;
-  max-width: 270px;
+  min-width: 210px;
+  max-width: 280px;
 }
 
 .issue-popup h3 {
@@ -283,6 +283,30 @@ h3 {
   margin: 8px 0;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+.map-popup-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #082f26;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.map-popup-btn:hover {
+  background: #0b3d2e;
+  transform: translateY(-1px);
 }
 
 .leaflet-popup-content-wrapper {
