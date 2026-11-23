@@ -626,6 +626,110 @@ function App() {
       setCommentPosting(false);
     }
   };
+
+  // Map interactive report modal state & actions
+  const [selectedMapIssue, setSelectedMapIssue] = useState(null);
+  const [mapComments, setMapComments] = useState([]);
+  const [mapCommentText, setMapCommentText] = useState("");
+  const [mapCommentPosting, setMapCommentPosting] = useState(false);
+  const [mapVoteLoading, setMapVoteLoading] = useState(false);
+
+  const handleOpenMapIssue = async (issue) => {
+    let issueData = { ...issue };
+    // Fetch active vote if user is logged in
+    if (user?.id) {
+      try {
+        const vRes = await axios.get(`${API}/issues/${issue.id}/vote/${user.id}`);
+        issueData.userVote = vRes.data?.userVote || null;
+      } catch {
+        issueData.userVote = null;
+      }
+    }
+    setSelectedMapIssue(issueData);
+    setMapCommentText("");
+    // Fetch comments
+    try {
+      const cRes = await axios.get(`${API}/issues/${issue.id}/comments`);
+      setMapComments(cRes.data || []);
+    } catch {
+      setMapComments([]);
+    }
+  };
+
+  const handleMapVote = async (voteType) => {
+    if (!user?.id) {
+      alert("Please login to cast your verification vote on this issue.");
+      setSelectedMapIssue(null);
+      go("login");
+      return;
+    }
+    if (!selectedMapIssue?.id || mapVoteLoading) return;
+    setMapVoteLoading(true);
+    try {
+      const res = await axios.post(`${API}/issues/${selectedMapIssue.id}/vote`, {
+        userId: user.id,
+        voteType,
+      });
+      const newUp = res.data.upvotes_count;
+      const newDown = res.data.downvotes_count;
+      const newUserVote = res.data.userVote;
+      setSelectedMapIssue((prev) => ({
+        ...prev,
+        upvotes_count: newUp,
+        downvotes_count: newDown,
+        userVote: newUserVote,
+      }));
+      // Sync with issues list so map popup counters update instantly
+      setIssues((prevList) =>
+        prevList.map((item) =>
+          item.id === selectedMapIssue.id
+            ? { ...item, upvotes_count: newUp, downvotes_count: newDown }
+            : item
+        )
+      );
+    } catch {
+      alert("Could not register your vote. Please try again.");
+    } finally {
+      setMapVoteLoading(false);
+    }
+  };
+
+  const handlePostMapComment = async (e) => {
+    e.preventDefault();
+    if (!user?.id) {
+      alert("Please login to participate in the citizen discussion.");
+      setSelectedMapIssue(null);
+      go("login");
+      return;
+    }
+    const text = mapCommentText.trim();
+    if (!text || !selectedMapIssue?.id || mapCommentPosting) return;
+    setMapCommentPosting(true);
+    try {
+      const res = await axios.post(`${API}/issues/${selectedMapIssue.id}/comments`, {
+        userId: user.id,
+        comment: text,
+      });
+      setMapComments((prev) => [...prev, res.data]);
+      setMapCommentText("");
+      // Increment comments_count in modal and issues list
+      setSelectedMapIssue((prev) => ({
+        ...prev,
+        comments_count: (Number(prev.comments_count) || 0) + 1,
+      }));
+      setIssues((prevList) =>
+        prevList.map((item) =>
+          item.id === selectedMapIssue.id
+            ? { ...item, comments_count: (Number(item.comments_count) || 0) + 1 }
+            : item
+        )
+      );
+    } catch (err) {
+      alert(err.response?.data?.error || "Could not post comment.");
+    } finally {
+      setMapCommentPosting(false);
+    }
+  };
   const [userReports, setUserReports] = useState([]);
   const [complaint, setComplaint] = useState({
     title: "",
@@ -1304,25 +1408,51 @@ function App() {
                   >
                     <Popup>
                       <div className="issue-popup">
-                        <h3>{issue.category || t("civicIssue")}</h3>
-                        <p>
-                          {issue.description || t("noDescription")}
-                        </p>
-                        <p>
-                          <b>{t("status")}:</b>{" "}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexWrap: "wrap", gap: "4px" }}>
+                          <span style={{ fontSize: "11px", fontWeight: "800", textTransform: "uppercase", color: "#065f46", letterSpacing: "0.5px" }}>
+                            {issue.category || t("civicIssue")}
+                          </span>
                           <span
-                            className={
-                              "status " + statusClass(issue.status)
-                            }
+                            className={"status " + statusClass(issue.status)}
+                            style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "10px" }}
                           >
                             {translateStatus(issue.status || "Pending", language)}
                           </span>
+                        </div>
+
+                        <h4 style={{ margin: "2px 0 6px", fontSize: "14px", fontWeight: "700", color: "#0f172a", lineHeight: "1.3" }}>
+                          {issue.title || issue.category || "Reported Issue"}
+                        </h4>
+
+                        <p style={{ margin: "0 0 8px", fontSize: "12px", color: "#475569", lineHeight: "1.4", maxHeight: "42px", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {issue.description || t("noDescription")}
                         </p>
+
+                        <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "8px", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: "11px", background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0", padding: "2px 6px", borderRadius: "4px", fontWeight: "700" }}>
+                            👍 {issue.upvotes_count || 0}
+                          </span>
+                          <span style={{ fontSize: "11px", background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", padding: "2px 6px", borderRadius: "4px", fontWeight: "700" }}>
+                            👎 {issue.downvotes_count || 0}
+                          </span>
+                          <span style={{ fontSize: "11px", background: "#f8fafc", color: "#475569", border: "1px solid #e2e8f0", padding: "2px 6px", borderRadius: "4px", fontWeight: "600" }}>
+                            💬 {issue.comments_count || 0}
+                          </span>
+                        </div>
+
                         {issue.tracking_id && (
-                          <p>
+                          <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "8px", fontFamily: "monospace" }}>
                             <b>{t("trackingId")}:</b> {issue.tracking_id}
-                          </p>
+                          </div>
                         )}
+
+                        <button
+                          type="button"
+                          className="map-popup-btn"
+                          onClick={() => handleOpenMapIssue(issue)}
+                        >
+                          <span>🔍</span> View Full Report, Vote & Discuss →
+                        </button>
                       </div>
                     </Popup>
                   </Marker>
@@ -1355,6 +1485,353 @@ function App() {
                 {t("refreshMap")}
               </button>
             </div>
+
+            {/* Interactive Map Issue Detail Modal (Clickable from Map Marker) */}
+            {selectedMapIssue && (
+              <div
+                className="cw-map-modal-overlay"
+                style={{
+                  position: "fixed",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: "rgba(15, 23, 42, 0.7)",
+                  backdropFilter: "blur(4px)",
+                  zIndex: 99999,
+                  display: "grid",
+                  placeItems: "center",
+                  padding: "16px",
+                }}
+                onClick={() => setSelectedMapIssue(null)}
+              >
+                <div
+                  className="cw-map-modal-card"
+                  style={{
+                    background: "#ffffff",
+                    width: "100%",
+                    maxWidth: "680px",
+                    maxHeight: "90vh",
+                    borderRadius: "16px",
+                    overflowY: "auto",
+                    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                    padding: "24px",
+                    position: "relative",
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Top Header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid #e2e8f0", paddingBottom: "14px", marginBottom: "16px" }}>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "6px" }}>
+                        <span style={{ fontFamily: "monospace", fontWeight: "800", color: "#082f26", fontSize: "15px", background: "#f0fdf4", padding: "2px 8px", borderRadius: "6px", border: "1px solid #bbf7d0" }}>
+                          {selectedMapIssue.tracking_id}
+                        </span>
+                        <span className={"status " + statusClass(selectedMapIssue.status)}>
+                          {translateStatus(selectedMapIssue.status || "Pending", language)}
+                        </span>
+                        {selectedMapIssue.is_duplicate && (
+                          <span style={{ fontSize: "11px", fontWeight: "800", color: "#854d0e", background: "#fef9c3", border: "1px solid #fef08a", padding: "2px 8px", borderRadius: "4px" }}>
+                            ⚠️ Merged Duplicate Issue
+                          </span>
+                        )}
+                      </div>
+                      <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "800", color: "#0f172a" }}>
+                        {selectedMapIssue.title || selectedMapIssue.category || "Reported Civic Issue"}
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMapIssue(null)}
+                      style={{
+                        background: "#f1f5f9",
+                        border: "none",
+                        borderRadius: "50%",
+                        width: "32px",
+                        height: "32px",
+                        fontSize: "15px",
+                        fontWeight: "700",
+                        color: "#64748b",
+                        cursor: "pointer",
+                        display: "grid",
+                        placeItems: "center",
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Photo Evidence if exists */}
+                  {selectedMapIssue.photo_url && (
+                    <div style={{ marginBottom: "16px" }}>
+                      <div style={{ fontSize: "12px", fontWeight: "700", color: "#475569", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span>📸</span> Citizen Photo Evidence
+                      </div>
+                      <img
+                        src={selectedMapIssue.photo_url.startsWith("http") || selectedMapIssue.photo_url.startsWith("data:") ? selectedMapIssue.photo_url : `http://localhost:5001${selectedMapIssue.photo_url}`}
+                        alt="Issue evidence"
+                        style={{ width: "100%", maxHeight: "260px", objectFit: "cover", borderRadius: "10px", border: "1px solid #e2e8f0" }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Description & Location Card */}
+                  <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "14px", border: "1px solid #e2e8f0", marginBottom: "16px" }}>
+                    <div style={{ marginBottom: "12px" }}>
+                      <div style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", marginBottom: "4px" }}>
+                        Issue Description
+                      </div>
+                      <p style={{ margin: 0, fontSize: "13px", color: "#1e293b", lineHeight: "1.5" }}>
+                        {selectedMapIssue.description || "No description provided."}
+                      </p>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px", paddingTop: "10px", borderTop: "1px solid #f1f5f9", fontSize: "12px" }}>
+                      <div>
+                        <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>Department</span>
+                        <b style={{ color: "#0f172a" }}>{selectedMapIssue.department || "Municipal Corporation"}</b>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>Location</span>
+                        <b style={{ color: "#0f172a" }}>{[selectedMapIssue.block, selectedMapIssue.city, selectedMapIssue.state].filter(Boolean).join(", ") || "Mumbai, Maharashtra"}</b>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>Coordinates</span>
+                        <b style={{ color: "#0f172a", fontFamily: "monospace", fontSize: "11px" }}>
+                          {Number(selectedMapIssue.latitude).toFixed(4)}, {Number(selectedMapIssue.longitude).toFixed(4)}
+                        </b>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748b", fontSize: "11px", display: "block" }}>Reported On</span>
+                        <b style={{ color: "#0f172a" }}>
+                          {selectedMapIssue.created_at ? new Date(selectedMapIssue.created_at).toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" }) : "Recently"}
+                        </b>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Community Verification Voting (Upvote / Downvote) */}
+                  <div style={{ padding: "14px", background: "#f0fdf4", borderRadius: "10px", border: "1px solid #bbf7d0", marginBottom: "16px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
+                      <div>
+                        <div style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "#166534" }}>
+                          Community Verification & Trust
+                        </div>
+                        <div style={{ fontSize: "13px", fontWeight: "800", color: "#0f172a" }}>
+                          {selectedMapIssue.upvotes_count || 0} Citizens Verified • {selectedMapIssue.downvotes_count || 0} Flagged
+                        </div>
+                      </div>
+                      <div style={{ fontSize: "12px", fontWeight: "700", color: "#047857" }}>
+                        {((Number(selectedMapIssue.upvotes_count) || 0) + (Number(selectedMapIssue.downvotes_count) || 0)) > 0
+                          ? `${Math.round(((Number(selectedMapIssue.upvotes_count) || 0) / ((Number(selectedMapIssue.upvotes_count) || 0) + (Number(selectedMapIssue.downvotes_count) || 0))) * 100)}% Community Trust`
+                          : "Awaiting Community Votes"}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: "10px" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleMapVote("upvote")}
+                        disabled={mapVoteLoading}
+                        style={{
+                          flex: 1,
+                          padding: "10px 14px",
+                          borderRadius: "8px",
+                          border: selectedMapIssue.userVote === "upvote" ? "2px solid #16a34a" : "1px solid #cbd5e1",
+                          background: selectedMapIssue.userVote === "upvote" ? "#dcfce7" : "#ffffff",
+                          color: selectedMapIssue.userVote === "upvote" ? "#15803d" : "#334155",
+                          fontWeight: "700",
+                          fontSize: "12px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "6px",
+                          transition: "all 0.15s ease",
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                        }}
+                      >
+                        <span>👍</span> {selectedMapIssue.userVote === "upvote" ? `Verified by You (${selectedMapIssue.upvotes_count || 0})` : `Verify Issue (${selectedMapIssue.upvotes_count || 0})`}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleMapVote("downvote")}
+                        disabled={mapVoteLoading}
+                        style={{
+                          flex: 1,
+                          padding: "10px 14px",
+                          borderRadius: "8px",
+                          border: selectedMapIssue.userVote === "downvote" ? "2px solid #dc2626" : "1px solid #cbd5e1",
+                          background: selectedMapIssue.userVote === "downvote" ? "#fee2e2" : "#ffffff",
+                          color: selectedMapIssue.userVote === "downvote" ? "#b91c1c" : "#334155",
+                          fontWeight: "700",
+                          fontSize: "12px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "6px",
+                          transition: "all 0.15s ease",
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                        }}
+                      >
+                        <span>👎</span> {selectedMapIssue.userVote === "downvote" ? `Flagged by You (${selectedMapIssue.downvotes_count || 0})` : `Flag Fake/Duplicate (${selectedMapIssue.downvotes_count || 0})`}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Citizen Discussion Section */}
+                  <div style={{ background: "#ffffff", borderRadius: "10px", border: "1px solid #e2e8f0", padding: "16px", marginBottom: "16px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1px solid #f1f5f9", paddingBottom: "8px" }}>
+                      <h4 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span>💬</span> Citizen Discussion ({mapComments.length})
+                      </h4>
+                      <span style={{ fontSize: "11px", color: "#64748b" }}>Live on-ground updates & resident talk</span>
+                    </div>
+
+                    {/* Comments Stream */}
+                    <div style={{ maxHeight: "240px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px", paddingRight: "4px" }}>
+                      {mapComments.length === 0 ? (
+                        <div style={{ padding: "18px", textAlign: "center", color: "#94a3b8", fontSize: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
+                          No comments on this report yet. Share your on-ground observation or update!
+                        </div>
+                      ) : (
+                        mapComments.map((c) => (
+                          <div
+                            key={c.id}
+                            style={{
+                              padding: "10px 12px",
+                              background: "#f8fafc",
+                              borderRadius: "8px",
+                              border: "1px solid #f1f5f9",
+                              display: "flex",
+                              gap: "10px",
+                              alignItems: "flex-start",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "50%",
+                                background: "#082f26",
+                                color: "#a7f3d0",
+                                fontWeight: "700",
+                                fontSize: "12px",
+                                display: "grid",
+                                placeItems: "center",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {c.user_name ? c.user_name.charAt(0).toUpperCase() : "C"}
+                            </div>
+
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2px" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <span style={{ fontSize: "12px", fontWeight: "700", color: "#0f172a" }}>
+                                    {c.user_name || "Citizen"}
+                                  </span>
+                                  <span style={{ fontSize: "9px", background: "#dcfce7", color: "#166534", padding: "1px 5px", borderRadius: "4px", fontWeight: "700" }}>
+                                    ✓ Resident
+                                  </span>
+                                  {c.user_city && (
+                                    <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+                                      • {c.user_city}
+                                    </span>
+                                  )}
+                                </div>
+                                <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+                                  {new Date(c.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                </span>
+                              </div>
+                              <p style={{ margin: 0, fontSize: "12px", color: "#334155", lineHeight: "1.4" }}>
+                                {c.comment}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Post Comment Input */}
+                    <form onSubmit={handlePostMapComment} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      <textarea
+                        rows="2"
+                        value={mapCommentText}
+                        onChange={(e) => setMapCommentText(e.target.value)}
+                        placeholder={user ? `Write an update or comment as ${user.name.split(" ")[0]}...` : "Login to join the citizen discussion..."}
+                        disabled={!user || mapCommentPosting}
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "12px",
+                          resize: "none",
+                          background: user ? "white" : "#f8fafc",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+                        {!user ? (
+                          <span style={{ fontSize: "11px", color: "#b91c1c" }}>
+                            🔒 Please <a href="#login" onClick={(e) => { e.preventDefault(); setSelectedMapIssue(null); go("login"); }} style={{ color: "#082f26", fontWeight: "700", textDecoration: "underline" }}>Login</a> to vote or post comments.
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: "11px", color: "#64748b" }}>
+                            Commenting as <b>{user.name}</b>
+                          </span>
+                        )}
+                        <button
+                          type="submit"
+                          disabled={!user || !mapCommentText.trim() || mapCommentPosting}
+                          style={{
+                            background: user && mapCommentText.trim() ? "#082f26" : "#cbd5e1",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "6px",
+                            padding: "6px 14px",
+                            fontSize: "12px",
+                            fontWeight: "700",
+                            cursor: user && mapCommentText.trim() && !mapCommentPosting ? "pointer" : "not-allowed",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <span>💬</span> {mapCommentPosting ? "Posting..." : "Post Comment"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #e2e8f0", paddingTop: "14px" }}>
+                    <span style={{ fontSize: "12px", color: "#64748b" }}>
+                      CivicWatch Community Verification & Transparency
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMapIssue(null)}
+                      style={{
+                        padding: "8px 18px",
+                        background: "#082f26",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        fontSize: "13px",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Close / Back to Map
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         )}
         {/* TRACK REPORT */}
