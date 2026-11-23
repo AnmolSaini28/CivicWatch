@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   MapContainer,
@@ -15,6 +15,24 @@ const API =
   import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 const STATUSES = ["Pending", "In Progress", "Resolved"];
+
+// Calculate seriousness score on the basis of likes (upvotes), dislikes (downvotes), and comments
+export function calculateSeriousness(issue) {
+  if (!issue) return 0;
+  const upvotes = Number(issue.upvotes_count || 0);
+  const downvotes = Number(issue.downvotes_count || 0);
+  const comments = Number(issue.comments_count || 0);
+  // Formula: likes verify issue (+2), comments indicate active discussion/escalation (+3), dislikes reduce trust (-1)
+  const score = (upvotes * 2) + (comments * 3) - downvotes;
+  return Math.max(0, score);
+}
+
+// Classify seriousness score into High, Mid, Low
+export function getPriorityLevel(score) {
+  if (score >= 12) return "high";
+  if (score >= 3) return "mid";
+  return "low";
+}
 
 const DEPARTMENTS = [
   "Municipal Corporation",
@@ -222,6 +240,21 @@ export default function AdminDashboard({
   // Temporary changes made in complaint table.
   const [draftUpdates, setDraftUpdates] = useState({});
 
+  // Priority filter state: "", "all", "high", "mid", "low"
+  const [priorityFilter, setPriorityFilter] = useState("");
+  const [priorityMenuOpen, setPriorityMenuOpen] = useState(false);
+  const priorityMenuRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (priorityMenuRef.current && !priorityMenuRef.current.contains(event.target)) {
+        setPriorityMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Selected complaint for detail modal.
   const [selectedIssue, setSelectedIssue] = useState(null);
 
@@ -333,9 +366,32 @@ export default function AdminDashboard({
     }));
   }
 
+  // Counts of pending and in-progress requests across priority levels
+  const priorityCounts = useMemo(() => {
+    const activeRequests = issues.filter(
+      (i) => i.status === "Pending" || i.status === "In Progress"
+    );
+    let high = 0;
+    let mid = 0;
+    let low = 0;
+    activeRequests.forEach((issue) => {
+      const score = calculateSeriousness(issue);
+      const level = getPriorityLevel(score);
+      if (level === "high") high++;
+      else if (level === "mid") mid++;
+      else low++;
+    });
+    return {
+      all: activeRequests.length,
+      high,
+      mid,
+      low,
+    };
+  }, [issues]);
+
   // Apply all filters together.
   const filteredIssues = useMemo(() => {
-    return issues.filter((issue) => {
+    let result = issues.filter((issue) => {
       const issueMonth = getMonth(issue.created_at);
       const issueDate = issue.created_at
         ? new Date(issue.created_at)
@@ -357,10 +413,25 @@ export default function AdminDashboard({
         issueMonth !== filters.month
       ) return false;
 
-      if (
-        filters.status &&
-        issue.status !== filters.status
-      ) return false;
+      // Status and Priority filtering
+      if (priorityFilter) {
+        // Priority filter requirement: strictly only "Pending" and "In Progress" requests!
+        if (issue.status !== "Pending" && issue.status !== "In Progress") {
+          return false;
+        }
+        if (priorityFilter !== "all") {
+          const score = calculateSeriousness(issue);
+          const level = getPriorityLevel(score);
+          if (level !== priorityFilter) {
+            return false;
+          }
+        }
+      } else {
+        if (
+          filters.status &&
+          issue.status !== filters.status
+        ) return false;
+      }
 
       if (
         filters.department &&
@@ -384,7 +455,21 @@ export default function AdminDashboard({
 
       return true;
     });
-  }, [issues, filters]);
+
+    // When priority filter is applied, sort in decreasing order of seriousness score!
+    if (priorityFilter) {
+      result = [...result].sort((a, b) => {
+        const scoreA = calculateSeriousness(a);
+        const scoreB = calculateSeriousness(b);
+        if (scoreB !== scoreA) {
+          return scoreB - scoreA; // Highest seriousness first!
+        }
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      });
+    }
+
+    return result;
+  }, [issues, filters, priorityFilter]);
 
   // Dashboard statistics based on currently filtered complaints.
   const stats = useMemo(() => ({
@@ -546,17 +631,27 @@ export default function AdminDashboard({
       "city",
       "department",
       "status",
+      "priority",
+      "seriousness_score",
       "created_at",
     ];
 
-    const rows = searchedIssues.map((issue) =>
-      columns.map((key) => {
-        const value = String(issue[key] ?? "")
+    const rows = searchedIssues.map((issue) => {
+      const score = calculateSeriousness(issue);
+      const priority = issue.status === "Resolved" ? "Resolved" : getPriorityLevel(score).toUpperCase();
+      const rowItem = {
+        ...issue,
+        priority,
+        seriousness_score: score,
+        created_at: formatDate(issue.created_at),
+      };
+      return columns.map((key) => {
+        const value = String(rowItem[key] ?? "")
           .replace(/"/g, '""');
 
         return `"${value}"`;
-      }).join(",")
-    );
+      }).join(",");
+    });
 
     const csv = [
       columns.join(","),
@@ -948,7 +1043,7 @@ export default function AdminDashboard({
                   </button>
                 </div>
 
-                <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap", alignItems: "center" }}>
                   {[
                     ["All", ""],
                     ["🟠 Pending", "Pending"],
@@ -958,23 +1053,368 @@ export default function AdminDashboard({
                     <button
                       key={label}
                       type="button"
-                      onClick={() => updateFilter("status", val)}
+                      onClick={() => {
+                        setPriorityFilter("");
+                        updateFilter("status", val);
+                      }}
                       style={{
                         padding: "6px 14px",
                         borderRadius: "20px",
                         border: "1px solid",
-                        borderColor: filters.status === val ? "#0b3d2e" : "#d8e0db",
-                        background: filters.status === val ? "#0b3d2e" : "#ffffff",
-                        color: filters.status === val ? "#ffffff" : "#334155",
+                        borderColor: !priorityFilter && filters.status === val ? "#0b3d2e" : "#d8e0db",
+                        background: !priorityFilter && filters.status === val ? "#0b3d2e" : "#ffffff",
+                        color: !priorityFilter && filters.status === val ? "#ffffff" : "#334155",
                         fontWeight: "600",
                         fontSize: "12px",
                         cursor: "pointer",
+                        transition: "all 0.15s ease",
                       }}
                     >
                       {label}
                     </button>
                   ))}
+
+                  {/* Priority Filter dropdown button next to Resolved */}
+                  <div ref={priorityMenuRef} style={{ position: "relative", display: "inline-block" }}>
+                    <button
+                      type="button"
+                      onClick={() => setPriorityMenuOpen((prev) => !prev)}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: "20px",
+                        border: "1px solid",
+                        borderColor: priorityFilter ? "#0b3d2e" : "#cbd5e1",
+                        background: priorityFilter
+                          ? priorityFilter === "high"
+                            ? "#991b1b"
+                            : priorityFilter === "mid"
+                              ? "#854d0e"
+                              : priorityFilter === "low"
+                                ? "#166534"
+                                : "#0b3d2e"
+                          : "#f8fafc",
+                        color: priorityFilter ? "#ffffff" : "#1e293b",
+                        fontWeight: "700",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        boxShadow: priorityFilter ? "0 2px 4px rgba(0,0,0,0.12)" : "none",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Filter and sort by seriousness based on Likes, Dislikes, and Comments"
+                    >
+                      <span>⚡ Priority</span>
+                      {priorityFilter && (
+                        <span
+                          style={{
+                            background: "rgba(255,255,255,0.25)",
+                            padding: "1px 6px",
+                            borderRadius: "10px",
+                            fontSize: "10px",
+                            fontWeight: "800",
+                          }}
+                        >
+                          {priorityFilter === "high"
+                            ? "🔴 High"
+                            : priorityFilter === "mid"
+                              ? "🟡 Mid"
+                              : priorityFilter === "low"
+                                ? "🟢 Low"
+                                : "All"}
+                        </span>
+                      )}
+                      <span style={{ fontSize: "10px" }}>▾</span>
+                    </button>
+
+                    {priorityMenuOpen && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          top: "calc(100% + 6px)",
+                          zIndex: 9999,
+                          background: "#ffffff",
+                          borderRadius: "10px",
+                          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+                          border: "1px solid #e2e8f0",
+                          minWidth: "260px",
+                          overflow: "hidden",
+                          padding: "6px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            padding: "8px 10px 6px",
+                            fontSize: "11px",
+                            fontWeight: "800",
+                            color: "#64748b",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px",
+                            borderBottom: "1px solid #f1f5f9",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span>⚡ Seriousness Filter</span>
+                          <span style={{ fontSize: "10px", fontWeight: "600", color: "#94a3b8" }}>
+                            Likes • Dislikes • Comments
+                          </span>
+                        </div>
+
+                        {/* 1. All */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPriorityFilter("all");
+                            setPriorityMenuOpen(false);
+                          }}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            padding: "8px 10px",
+                            border: "none",
+                            borderRadius: "6px",
+                            background: priorityFilter === "all" ? "#f0fdf4" : "transparent",
+                            cursor: "pointer",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            fontSize: "12px",
+                            fontWeight: priorityFilter === "all" ? "700" : "500",
+                            color: priorityFilter === "all" ? "#166534" : "#1e293b",
+                            marginTop: "4px",
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: "700" }}>All (Pending & In Progress)</div>
+                            <div style={{ fontSize: "11px", color: "#64748b" }}>
+                              Sorted by seriousness (high to low)
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              background: "#f1f5f9",
+                              padding: "2px 7px",
+                              borderRadius: "10px",
+                              fontSize: "11px",
+                              fontWeight: "700",
+                              color: "#475569",
+                            }}
+                          >
+                            {priorityCounts.all}
+                          </span>
+                        </button>
+
+                        {/* 2. High */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPriorityFilter("high");
+                            setPriorityMenuOpen(false);
+                          }}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            padding: "8px 10px",
+                            border: "none",
+                            borderRadius: "6px",
+                            background: priorityFilter === "high" ? "#fef2f2" : "transparent",
+                            cursor: "pointer",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            fontSize: "12px",
+                            fontWeight: priorityFilter === "high" ? "700" : "500",
+                            color: priorityFilter === "high" ? "#991b1b" : "#1e293b",
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: "700", display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span>🔴 High Priority</span>
+                            </div>
+                            <div style={{ fontSize: "11px", color: "#64748b" }}>
+                              Score ≥ 12 (Critical community urgency)
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              background: "#fee2e2",
+                              padding: "2px 7px",
+                              borderRadius: "10px",
+                              fontSize: "11px",
+                              fontWeight: "700",
+                              color: "#991b1b",
+                            }}
+                          >
+                            {priorityCounts.high}
+                          </span>
+                        </button>
+
+                        {/* 3. Mid */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPriorityFilter("mid");
+                            setPriorityMenuOpen(false);
+                          }}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            padding: "8px 10px",
+                            border: "none",
+                            borderRadius: "6px",
+                            background: priorityFilter === "mid" ? "#fefce8" : "transparent",
+                            cursor: "pointer",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            fontSize: "12px",
+                            fontWeight: priorityFilter === "mid" ? "700" : "500",
+                            color: priorityFilter === "mid" ? "#854d0e" : "#1e293b",
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: "700", display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span>🟡 Mid Priority</span>
+                            </div>
+                            <div style={{ fontSize: "11px", color: "#64748b" }}>
+                              Score 3 - 11 (Moderate attention)
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              background: "#fef08a",
+                              padding: "2px 7px",
+                              borderRadius: "10px",
+                              fontSize: "11px",
+                              fontWeight: "700",
+                              color: "#854d0e",
+                            }}
+                          >
+                            {priorityCounts.mid}
+                          </span>
+                        </button>
+
+                        {/* 4. Low */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPriorityFilter("low");
+                            setPriorityMenuOpen(false);
+                          }}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            padding: "8px 10px",
+                            border: "none",
+                            borderRadius: "6px",
+                            background: priorityFilter === "low" ? "#f0fdf4" : "transparent",
+                            cursor: "pointer",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            fontSize: "12px",
+                            fontWeight: priorityFilter === "low" ? "700" : "500",
+                            color: priorityFilter === "low" ? "#166534" : "#1e293b",
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: "700", display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span>🟢 Low Priority</span>
+                            </div>
+                            <div style={{ fontSize: "11px", color: "#64748b" }}>
+                              Score &lt; 3 (Early stage / low engagement)
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              background: "#dcfce7",
+                              padding: "2px 7px",
+                              borderRadius: "10px",
+                              fontSize: "11px",
+                              fontWeight: "700",
+                              color: "#166534",
+                            }}
+                          >
+                            {priorityCounts.low}
+                          </span>
+                        </button>
+
+                        {priorityFilter && (
+                          <div style={{ borderTop: "1px solid #f1f5f9", marginTop: "4px", paddingTop: "4px" }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPriorityFilter("");
+                                setPriorityMenuOpen(false);
+                              }}
+                              style={{
+                                width: "100%",
+                                padding: "6px 10px",
+                                background: "#f8fafc",
+                                border: "none",
+                                borderRadius: "4px",
+                                fontSize: "11px",
+                                fontWeight: "600",
+                                color: "#64748b",
+                                cursor: "pointer",
+                                textAlign: "center",
+                              }}
+                            >
+                              ✕ Reset Priority Filter
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
+
+                {priorityFilter && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      marginBottom: "12px",
+                      padding: "8px 12px",
+                      background: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <span style={{ fontWeight: "700", color: "#166534" }}>⚡ Active Priority Filter:</span>
+                    <span style={{ fontWeight: "600", color: "#1e293b" }}>
+                      {priorityFilter === "high"
+                        ? "🔴 High Priority"
+                        : priorityFilter === "mid"
+                          ? "🟡 Mid Priority"
+                          : priorityFilter === "low"
+                            ? "🟢 Low Priority"
+                            : "All Priorities"}{" "}
+                      (Showing {searchedIssues.length} Pending & In Progress complaints sorted by seriousness)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPriorityFilter("")}
+                      style={{
+                        marginLeft: "auto",
+                        background: "none",
+                        border: "none",
+                        color: "#dc2626",
+                        fontWeight: "700",
+                        fontSize: "11px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Clear ✕
+                    </button>
+                  </div>
+                )}
 
                 <input
                   className="cw-search"
@@ -1398,6 +1838,32 @@ export default function AdminDashboard({
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px", marginBottom: "16px" }}>
                 <div><strong>Status:</strong> <span className={`cw-status-select ${selectedIssue.status.toLowerCase().replace(/\s+/g, "")}`} style={{ padding: "3px 8px", borderRadius: "10px" }}>{selectedIssue.status}</span></div>
+                <div>
+                  <strong>Priority:</strong>{" "}
+                  {selectedIssue.status === "Resolved" ? (
+                    <span style={{ fontSize: "12px", color: "#64748b" }}>Resolved</span>
+                  ) : (
+                    (() => {
+                      const score = calculateSeriousness(selectedIssue);
+                      const level = getPriorityLevel(score);
+                      return (
+                        <span
+                          style={{
+                            padding: "2px 8px",
+                            borderRadius: "10px",
+                            fontSize: "12px",
+                            fontWeight: "700",
+                            background: level === "high" ? "#fee2e2" : level === "mid" ? "#fef08a" : "#dcfce7",
+                            color: level === "high" ? "#991b1b" : level === "mid" ? "#854d0e" : "#166534",
+                            border: `1px solid ${level === "high" ? "#fecaca" : level === "mid" ? "#fef08a" : "#bbf7d0"}`,
+                          }}
+                        >
+                          {level === "high" ? "🔴 High" : level === "mid" ? "🟡 Mid" : "🟢 Low"} (Score: {score})
+                        </span>
+                      );
+                    })()
+                  )}
+                </div>
                 <div><strong>Department:</strong> {selectedIssue.department}</div>
                 <div><strong>Location:</strong> {selectedIssue.city || "City not specified"}</div>
                 <div><strong>Reported By:</strong> {selectedIssue.reported_by || "Anonymous Citizen"}</div>
@@ -1743,6 +2209,7 @@ function ComplaintTable({
             <th>Department</th>
             <th>Community Trust</th>
             <th>Discussion</th>
+            <th>Priority</th>
             <th>Date</th>
             <th>Status</th>
             <th>Action</th>
@@ -1854,6 +2321,84 @@ function ComplaintTable({
                   </button>
                 </td>
 
+                <td>
+                  {(() => {
+                    if (issue.status === "Resolved") {
+                      return (
+                        <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: "600" }}>
+                          —
+                        </span>
+                      );
+                    }
+                    const score = calculateSeriousness(issue);
+                    const level = getPriorityLevel(score);
+                    if (level === "high") {
+                      return (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            fontSize: "11px",
+                            fontWeight: "800",
+                            color: "#991b1b",
+                            background: "#fef2f2",
+                            border: "1px solid #fecaca",
+                            padding: "2px 8px",
+                            borderRadius: "12px",
+                            whiteSpace: "nowrap",
+                          }}
+                          title={`High Priority • Seriousness Score: ${score} (Likes: ${issue.upvotes_count || 0}, Dislikes: ${issue.downvotes_count || 0}, Comments: ${issue.comments_count || 0})`}
+                        >
+                          🔴 High ({score})
+                        </span>
+                      );
+                    }
+                    if (level === "mid") {
+                      return (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            fontSize: "11px",
+                            fontWeight: "800",
+                            color: "#854d0e",
+                            background: "#fefce8",
+                            border: "1px solid #fef08a",
+                            padding: "2px 8px",
+                            borderRadius: "12px",
+                            whiteSpace: "nowrap",
+                          }}
+                          title={`Mid Priority • Seriousness Score: ${score} (Likes: ${issue.upvotes_count || 0}, Dislikes: ${issue.downvotes_count || 0}, Comments: ${issue.comments_count || 0})`}
+                        >
+                          🟡 Mid ({score})
+                        </span>
+                      );
+                    }
+                    return (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "3px",
+                          fontSize: "11px",
+                          fontWeight: "800",
+                          color: "#166534",
+                          background: "#f0fdf4",
+                          border: "1px solid #bbf7d0",
+                          padding: "2px 8px",
+                          borderRadius: "12px",
+                          whiteSpace: "nowrap",
+                        }}
+                        title={`Low Priority • Seriousness Score: ${score} (Likes: ${issue.upvotes_count || 0}, Dislikes: ${issue.downvotes_count || 0}, Comments: ${issue.comments_count || 0})`}
+                      >
+                        🟢 Low ({score})
+                      </span>
+                    );
+                  })()}
+                </td>
+
                 <td>{formatDate(issue.created_at)}</td>
 
                 <td>
@@ -1909,7 +2454,7 @@ function ComplaintTable({
 
           {issues.length === 0 && (
             <tr>
-              <td colSpan="7">
+              <td colSpan="10">
                 No complaints found.
               </td>
             </tr>
