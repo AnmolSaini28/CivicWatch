@@ -269,6 +269,7 @@ app.get("/api/issues", async (_req, res) => {
         comments_count,
         is_duplicate,
         duplicate_of_id,
+        is_anonymous,
         created_at
       FROM issues
       ORDER BY created_at DESC
@@ -1226,7 +1227,9 @@ app.get("/api/notifications/:userId", async (req, res) => {
         i.downvotes_count,
         i.comments_count,
         i.is_duplicate,
-        i.duplicate_of_id
+        i.duplicate_of_id,
+        i.is_anonymous,
+        i.photo_url
       FROM notifications n
       LEFT JOIN issues i ON n.issue_id = i.id
       WHERE n.user_id = $1
